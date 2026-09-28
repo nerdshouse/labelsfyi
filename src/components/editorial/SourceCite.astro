@@ -1,0 +1,34 @@
+---
+import type { SourceData } from '@/lib/content/types';
+import { SOURCE_TYPE } from '@/lib/editorial/meta';
+
+/**
+ * Inline attribution: tells the reader *what kind* of source supports a
+ * statement, who published it and when, then links to the full entry in the
+ * numbered source list.
+ */
+interface Props {
+  source: SourceData | null;
+  number?: number | undefined;
+}
+const { source, number } = Astro.props;
+const year = source?.publicationDate ? new Date(source.publicationDate).getFullYear() : null;
+const who = source?.publisher ?? null;
+---
+
+{source && (
+  <span class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-ink-3">
+    <span class="tag">{SOURCE_TYPE[source.sourceType]}</span>
+    {who && <span>{who}</span>}
+    {year && <span class="num">· {year}</span>}
+    {number && (
+      <a
+        href={`#source-${number}`}
+        class="num link font-mono"
+        aria-label={`Source ${number}: ${source.title}`}
+      >
+        [{number}]
+      </a>
+    )}
+  </span>
+)}

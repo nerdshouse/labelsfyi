@@ -1,0 +1,72 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import type { ReviewerDetail } from '@/lib/content/types';
+import { personPage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.reviewers.map((reviewer) => ({
+    params: { slug: reviewer.slug },
+    props: { reviewer },
+  }));
+}
+interface Props {
+  reviewer: ReviewerDetail;
+}
+const { reviewer: r } = Astro.props;
+const graph = await getContentGraph();
+const reviewed = [
+  ...graph.products.map((x) => ({
+    doc: x,
+    title: `${x.brand.name} ${x.name}`,
+    href: routes.product(x.slug),
+  })),
+  ...graph.ingredients.map((x) => ({ doc: x, title: x.name, href: routes.ingredient(x.slug) })),
+  ...graph.guides.map((x) => ({ doc: x, title: x.title, href: routes.guide(x.slug) })),
+  ...graph.comparisons.map((x) => ({ doc: x, title: x.title, href: routes.comparison(x.slug) })),
+].filter((x) => x.doc.reviews.some((rev) => rev.reviewer._id === r._id));
+const crumbs = [{ name: r.name, href: routes.reviewer(r.slug) }];
+---
+
+<BaseLayout
+  title={`${r.name}, ${r.credentials}`}
+  description={r.bio}
+  canonicalPath={routes.reviewer(r.slug)}
+  noindex={r.isPlaceholder}
+  crumbs={crumbs}
+  jsonLd={personPage(r)}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">Reviewer</p>
+      <h1 class="h1 mt-2">{r.name}</h1>
+      <p class="mt-2 text-lg text-ink-2">
+        {r.credentials}
+        {r.organization && `, ${r.organization}`}
+      </p>
+      {r.isPlaceholder && (
+        <p class="notice mt-5">
+          <strong class="text-ink">Placeholder.</strong> This reviewer profile exists only for
+          development and does not represent a real person.
+        </p>
+      )}
+      {r.bio && <p class="mt-5 text-ink-2">{r.bio}</p>}
+    </header>
+    <section class="mt-12 max-w-3xl">
+      <h2 class="caption rule-heavy pt-3 text-ink-3">Pages reviewed ({reviewed.length})</h2>
+      <ul class="mt-2">
+        {reviewed.map((x) => (
+          <li class="border-b border-line py-2.5">
+            <a href={x.href} class="link">
+              {x.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+</BaseLayout>

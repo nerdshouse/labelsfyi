@@ -1,0 +1,49 @@
+---
+import { absoluteUrl, metaDescription, pageTitle, SITE } from '@/lib/seo/site';
+import { PUBLIC_GSC_VERIFICATION } from 'astro:env/client';
+
+export interface SeoProps {
+  title?: string | null;
+  description?: string | null;
+  /** Path of the canonical URL, e.g. /products/foo. Defaults to the current path. */
+  canonicalPath?: string;
+  noindex?: boolean;
+  ogType?: 'website' | 'article';
+  image?: { url: string; alt: string } | null;
+}
+
+const {
+  title,
+  description,
+  canonicalPath,
+  noindex = false,
+  ogType = 'website',
+  image,
+} = Astro.props as SeoProps;
+const fullTitle = pageTitle(title);
+const desc = metaDescription(description);
+const canonical = absoluteUrl(canonicalPath ?? Astro.url.pathname);
+---
+
+<title>{fullTitle}</title>
+<meta name="description" content={desc} />
+<link rel="canonical" href={canonical} />
+{noindex && <meta name="robots" content="noindex, follow" />}
+
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:locale" content={SITE.locale} />
+<meta property="og:type" content={ogType} />
+<meta property="og:title" content={title ?? fullTitle} />
+<meta property="og:description" content={desc} />
+<meta property="og:url" content={canonical} />
+{image && <meta property="og:image" content={absoluteUrl(image.url)} />}
+{image && <meta property="og:image:alt" content={image.alt} />}
+
+<meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+<meta name="twitter:title" content={title ?? fullTitle} />
+<meta name="twitter:description" content={desc} />
+{SITE.twitter && <meta name="twitter:site" content={SITE.twitter} />}
+
+{PUBLIC_GSC_VERIFICATION && (
+  <meta name="google-site-verification" content={PUBLIC_GSC_VERIFICATION} />
+)}

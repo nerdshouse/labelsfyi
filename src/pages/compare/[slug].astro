@@ -1,0 +1,138 @@
+---
+import AffiliateDisclosure from '@/components/affiliate/AffiliateDisclosure.astro';
+import ComparisonTable from '@/components/comparison/ComparisonTable.astro';
+import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
+import ReviewLine from '@/components/editorial/ReviewLine.astro';
+import ProductRow from '@/components/product/ProductRow.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import Icon from '@/components/ui/Icon.astro';
+import PortableText from '@/components/ui/PortableText.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import type { ComparisonDetail } from '@/lib/content/types';
+import { articlePage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.comparisons.map((comparison) => ({
+    params: { slug: comparison.slug },
+    props: { comparison },
+  }));
+}
+
+interface Props {
+  comparison: ComparisonDetail;
+}
+const { comparison: c } = Astro.props;
+const crumbs = [
+  { name: 'Compare', href: '/compare' },
+  { name: c.title, href: routes.comparison(c.slug) },
+];
+---
+
+<BaseLayout
+  title={c.seoTitle ?? c.title}
+  description={c.seoDescription ?? c.dek}
+  canonicalPath={routes.comparison(c.slug)}
+  noindex={c.noindex}
+  crumbs={crumbs}
+  jsonLd={articlePage(c, routes.comparison(c.slug))}
+  ogType="article"
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {c.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This comparison" />
+      </div>
+    )}
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">Comparison · {c.productCount} products</p>
+      <h1 class="h1 mt-2">{c.title}</h1>
+      {c.dek && <p class="lede mt-3">{c.dek}</p>}
+      <div class="mt-5">
+        <ReviewLine meta={c} verifiedAt={c._updatedAt} verifiedLabel="Data refreshed" />
+      </div>
+    </header>
+
+    <div class="mt-8">
+      <PortableText value={c.intro} />
+    </div>
+
+    <section class="mt-10">
+      <SectionHead
+        id="table"
+        kicker="The numbers"
+        title={c.doseBasis ? `Compared ${c.doseBasis.label}` : 'Compared'}
+      />
+      {c.doseBasis && c.products.length ? (
+        <ComparisonTable products={c.products} basis={c.doseBasis} />
+      ) : c.products.length ? (
+        <div class="border-t border-ink">
+          {c.products.map((p) => (
+            <ProductRow product={p} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No products in this comparison yet">
+          Products appear here once they are published.
+        </EmptyState>
+      )}
+      <div class="mt-6">
+        <AffiliateDisclosure compact />
+      </div>
+    </section>
+
+    <section class="mt-16 grid gap-10 lg:grid-cols-2">
+      <div>
+        <SectionHead id="method" kicker="Method" title="How we calculated this" level={3} />
+        <PortableText value={c.methodology} />
+        <p class="mt-4 text-sm text-ink-3">
+          Figures come from each product’s current label and dated price observations. Missing
+          values are shown as unavailable, never estimated.
+        </p>
+      </div>
+      <div>
+        <SectionHead id="read" kicker="Read next" title="Related guides" level={3} />
+        {c.guides.length ? (
+          <ul>
+            {c.guides.map((g) => (
+              <li class="border-b border-line">
+                <a
+                  href={routes.guide(g.slug)}
+                  class="flex items-center justify-between gap-3 py-3 font-medium hover:underline"
+                >
+                  {g.title}
+                  <Icon name="arrow-right" size={14} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="text-sm text-ink-3">No related guides yet.</p>
+        )}
+        {c.doseBasis?.ingredient && (
+          <p class="mt-4 text-sm">
+            Ingredient reference:{' '}
+            <a href={routes.ingredient(c.doseBasis.ingredient.slug)} class="link font-medium">
+              {c.doseBasis.ingredient.name}
+            </a>
+          </p>
+        )}
+      </div>
+    </section>
+
+    <section class="mt-16">
+      <SectionHead id="review" kicker="Review" title="Review" level={3} />
+      <ReviewerBlock meta={c} />
+    </section>
+  </div>
+  <script>
+    import { track } from '@/lib/analytics/events';
+    track('comparison_view', { slug: location.pathname.split('/').pop() });
+  </script>
+</BaseLayout>

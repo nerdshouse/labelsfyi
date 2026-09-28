@@ -1,0 +1,145 @@
+---
+import EmptyState from '@/components/ui/EmptyState.astro';
+import {
+  describeFailure,
+  effectiveDoseCost,
+  isPriceStale,
+  latestPricesByMerchant,
+  productCosts,
+  type CalcResult,
+  type Money,
+} from '@/lib/calculations';
+import type { DoseBasis, ProductDetail, Quantity } from '@/lib/content/types';
+import { BUILD_TIME } from '@/lib/editorial/review';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { formatNumber, formatQuantity } from '@/lib/formatting/quantity';
+
+/**
+ * Cost breakdown from dated price observations. Every number shows its
+ * inputs, and every missing number says why it is missing.
+ */
+interface Props {
+  product: ProductDetail;
+  doseBasis?: DoseBasis | null;
+  amountPerServing?: Quantity | null;
+}
+const { product: p, doseBasis, amountPerServing } = Astro.props;
+const dose = doseBasis ? effectiveDoseCost(p, doseBasis, amountPerServing ?? null) : null;
+const base = dose ?? productCosts(p, latestPricesByMerchant(p.prices)[0] ?? null);
+const ref = base.snapshot;
+const latest = latestPricesByMerchant(p.prices);
+
+const per100g: CalcResult<Money> = base.perGram.ok
+  ? { ok: true, value: { ...base.perGram.value, amount: base.perGram.value.amount * 100 } }
+  : base.perGram;
+
+const stats: Array<{ label: string; result: CalcResult<Money>; note?: string }> = [
+  { label: 'Per serving', result: base.perServing },
+  ...(dose && doseBasis
+    ? [{ label: doseBasis.label.replace(/^per\b/i, 'Per'), result: dose.perDose }]
+    : []),
+  ...(per100g.ok || per100g.reason !== 'incompatible_units'
+    ? [{ label: 'Per 100 g of product', result: per100g }]
+    : []),
+];
+---
+
+{!ref ? (
+  <EmptyState title="No price observed yet">
+    We haven’t recorded a price for this product. Cost per serving will appear once we log a dated
+    price from a retailer.
+  </EmptyState>
+) : (
+  <div>
+    <dl class="grid border-y-[3px] border-ink sm:grid-cols-3">
+      {stats.map((s, i) => (
+        <div
+          class:list={[
+            'px-1 py-4 sm:px-4',
+            i > 0 && 'border-t border-line sm:border-t-0 sm:border-l',
+          ]}
+        >
+          <dt class="caption text-ink-3">{s.label}</dt>
+          <dd class="mt-1">
+            {s.result.ok ? (
+              <span class:list={['num font-mono text-2xl font-semibold', i === 0 && 'marker']}>
+                {formatMoney(s.result.value, { precise: true })}
+              </span>
+            ) : (
+              <span class="text-sm text-ink-3">{describeFailure(s.result.reason)}</span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
+
+    <div class="mt-4 space-y-1 text-sm text-ink-2">
+      <p>
+        Based on{' '}
+        <strong class="font-semibold text-ink">
+          {formatMoney({ amount: ref.price, currency: ref.currency })}
+        </strong>{' '}
+        for {formatQuantity(ref.packSize)} on {ref.merchant.name}, observed{' '}
+        <time datetime={ref.capturedAt}>{formatDate(ref.capturedAt)}</time>.
+        {isPriceStale(ref, BUILD_TIME) && (
+          <span class="marker ml-1">Older than 30 days; may have changed.</span>
+        )}
+      </p>
+      {base.servings.ok && base.perServing.ok && (
+        <p class="num font-mono text-xs text-ink-3">
+          {formatMoney({ amount: ref.price, currency: ref.currency })} ÷{' '}
+          {formatNumber(base.servings.value.servings, 1)} servings{' '}
+          {base.servings.value.basis === 'derived_from_pack_size' &&
+            `(pack ${formatQuantity(ref.packSize)} ÷ serving ${formatQuantity(p.servingSize)})`}{' '}
+          = {formatMoney(base.perServing.value, { precise: true })}
+        </p>
+      )}
+      {dose && dose.perDose.ok && doseBasis && dose.amountPerServing && base.servings.ok && (
+        <p class="num font-mono text-xs text-ink-3">
+          {formatNumber(base.servings.value.servings, 1)} servings ×{' '}
+          {formatQuantity(dose.amountPerServing)} ={' '}
+          {formatNumber(dose.perDose.value.dosesPerPack, 1)} × {formatQuantity(doseBasis)} ·{' '}
+          {formatMoney({ amount: ref.price, currency: ref.currency })} ÷{' '}
+          {formatNumber(dose.perDose.value.dosesPerPack, 1)} ={' '}
+          {formatMoney(dose.perDose.value, { precise: true })}
+        </p>
+      )}
+    </div>
+
+    <h3 class="caption mt-8 mb-2 text-ink-3">Latest observed price by retailer</h3>
+    <ul class="border-t border-ink">
+      {latest.map((s) => {
+        const c = productCosts(p, s).perServing;
+        return (
+          <li class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 border-b border-line py-3 text-sm sm:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <span class="font-medium">{s.merchant.name}</span>
+            <span class="num text-right font-mono sm:order-3 sm:text-left">
+              {formatMoney({ amount: s.price, currency: s.currency })}
+            </span>
+            <span class="num text-ink-3 sm:order-2">
+              {formatQuantity(s.packSize)}
+              {s.servings && ` · ${s.servings} servings`}
+            </span>
+            <span class="num text-right text-ink-3 sm:order-4">
+              {c.ok ? `${formatMoney(c.value, { precise: true })}/serving` : '—'}
+            </span>
+            <span class="num col-span-2 text-xs text-ink-3 sm:order-5 sm:col-span-4">
+              Observed {formatDate(s.capturedAt)}
+              {s.mrp && ` · MRP ${formatMoney({ amount: s.mrp, currency: s.currency })}`}
+              {s.availability === 'out_of_stock' && ' · out of stock at the time'}
+              {isPriceStale(s, BUILD_TIME) && ' · older than 30 days'}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+    <p class="mt-3 text-xs text-ink-3">
+      Prices are dated observations, not live prices. Retailers change prices often; check the
+      current price before buying.{' '}
+      <a href="/methodology#prices" class="link">
+        How we calculate cost
+      </a>
+    </p>
+  </div>
+)}

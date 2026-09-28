@@ -1,0 +1,65 @@
+---
+import ProductRow from '@/components/product/ProductRow.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import { routes } from '@/lib/seo/site';
+
+const { products, categories } = await getContentGraph();
+const groups = categories
+  .map((c) => ({ c, items: products.filter((p) => p.category?._id === c._id) }))
+  .filter((g) => g.items.length);
+const uncategorised = products.filter((p) => !p.category);
+const crumbs = [{ name: 'Products', href: '/products' }];
+---
+
+<BaseLayout
+  title="Supplement products, decoded"
+  description="Label breakdowns for supplements sold in India: what each serving contains, veg status, claims checked against evidence, and cost per serving."
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <h1 class="display">Products</h1>
+      <p class="lede mt-4">
+        {products.length} label breakdowns. Each one is built from a dated label capture, with
+        claims checked against evidence and cost worked out per serving.
+      </p>
+    </header>
+    <nav aria-label="Categories" class="scroll-strip mt-8 gap-2">
+      {groups.map((g) => (
+        <a href={`#${g.c.slug}`} class="tag shrink-0 py-1 hover:border-ink">
+          {g.c.name} · {g.items.length}
+        </a>
+      ))}
+    </nav>
+    <div class="mt-10 space-y-16">
+      {groups.map((g) => (
+        <section>
+          <SectionHead id={g.c.slug} kicker="Category" title={g.c.name}>
+            <a slot="aside" href={routes.category(g.c.slug)} class="link text-sm font-medium">
+              Category page →
+            </a>
+          </SectionHead>
+          {g.items.map((p) => (
+            <ProductRow product={p} />
+          ))}
+        </section>
+      ))}
+      {uncategorised.length > 0 && (
+        <section>
+          <SectionHead id="other" title="Other" />
+          {uncategorised.map((p) => (
+            <ProductRow product={p} />
+          ))}
+        </section>
+      )}
+      {products.length === 0 && (
+        <EmptyState title="No products published yet">Check back soon.</EmptyState>
+      )}
+    </div>
+  </div>
+</BaseLayout>

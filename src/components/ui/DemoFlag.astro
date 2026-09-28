@@ -1,0 +1,15 @@
+---
+/** Marks a page/entity as fictional demo content. Never hidden. */
+interface Props {
+  what?: string;
+}
+const { what = 'This page' } = Astro.props;
+---
+
+<p class="notice flex items-start gap-2" role="note">
+  <span class="tag tag-marker mt-px">Demo</span>
+  <span>
+    {what} uses fictional demo data to show how labels.fyi works. It does not describe a real
+    product, brand or person.
+  </span>
+</p>

@@ -1,0 +1,22 @@
+---
+import { AFFILIATE_DISCLOSURE } from '@/lib/affiliates';
+
+/** Plain-language disclosure. Placed before the links it describes, never in a tooltip. */
+interface Props {
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+---
+
+<p
+  class:list={['flex items-start gap-2 text-ink-2', compact ? 'text-xs' : 'notice-quiet']}
+  role="note"
+>
+  <span class="tag shrink-0">Disclosure</span>
+  <span>
+    {AFFILIATE_DISCLOSURE}{' '}
+    <a href="/methodology#commercial" class="link whitespace-nowrap">
+      Our policy
+    </a>
+  </span>
+</p>

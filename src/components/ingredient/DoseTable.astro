@@ -1,0 +1,67 @@
+---
+import type { StudiedDose } from '@/lib/content/types';
+import { formatNumber, unitLabel } from '@/lib/formatting/quantity';
+
+/**
+ * Studied doses. These describe research and reference values, not advice:
+ * the heading and caption say so. Stacks into labelled rows on mobile.
+ */
+interface Props {
+  doses: StudiedDose[];
+  sourceNumbers: Map<string, number>;
+}
+const { doses, sourceNumbers } = Astro.props;
+const range = (d: StudiedDose) => {
+  const u = unitLabel(d.unit);
+  if (d.min !== null && d.max !== null)
+    return d.min === d.max
+      ? `${formatNumber(d.min)} ${u}`
+      : `${formatNumber(d.min)}–${formatNumber(d.max)} ${u}`;
+  if (d.max !== null) return `up to ${formatNumber(d.max)} ${u}`;
+  if (d.min !== null) return `${formatNumber(d.min)}+ ${u}`;
+  return '—';
+};
+---
+
+<table class="facts max-md:block">
+  <caption class="mb-2 text-left text-xs text-ink-3 max-md:block">
+    Amounts used in research or set as reference values. Not a recommendation for you.
+  </caption>
+  <thead class="max-md:hidden">
+    <tr>
+      <th scope="col">Context</th>
+      <th scope="col" class="n">
+        Amount
+      </th>
+      <th scope="col">Frequency / duration</th>
+      <th scope="col">Population</th>
+      <th scope="col" class="n">
+        Source
+      </th>
+    </tr>
+  </thead>
+  <tbody class="max-md:block">
+    {doses.map((d) => {
+      const n = d.source ? sourceNumbers.get(d.source._id) : undefined;
+      return (
+        <tr class="max-md:grid max-md:grid-cols-[1fr_auto] max-md:border-b max-md:border-line max-md:py-3 max-md:[&>*]:border-0 max-md:[&>*]:py-0.5">
+          <th scope="row" class="text-left font-semibold">
+            {d.context}
+          </th>
+          <td class="n font-mono font-semibold max-md:row-span-2 max-md:self-start">{range(d)}</td>
+          <td class="text-ink-2">{[d.frequency, d.duration].filter(Boolean).join(' · ') || '—'}</td>
+          <td class="text-ink-3">{d.population ?? '—'}</td>
+          <td class="n max-md:col-span-2 max-md:text-left">
+            {n ? (
+              <a href={`#source-${n}`} class="link font-mono text-xs">
+                [{n}]
+              </a>
+            ) : (
+              '—'
+            )}
+          </td>
+        </tr>
+      );
+    })}
+  </tbody>
+</table>

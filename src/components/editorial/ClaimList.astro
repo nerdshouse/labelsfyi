@@ -1,0 +1,72 @@
+---
+import ClaimCard from '@/components/editorial/ClaimCard.astro';
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import type { ClaimData } from '@/lib/content/types';
+import { ASSESSMENT, ASSESSMENT_ORDER } from '@/lib/editorial/meta';
+
+interface Props {
+  claims: ClaimData[];
+  sourceNumbers: Map<string, number>;
+}
+const { claims: all, sourceNumbers } = Astro.props;
+const claims = all.filter((c) => c.status !== 'superseded');
+const earlier = all.filter((c) => c.status === 'superseded');
+---
+
+<div>
+  <p class="max-w-(--container-prose) text-ink-2">
+    We compare each claim with the label itself and with published evidence. We describe what the
+    evidence supports; we don’t score or rank products.
+  </p>
+  <p class="mt-2 max-w-(--container-prose) text-sm text-ink-3">
+    Amounts are as declared by the manufacturer. labels.fyi has not laboratory-tested this product.
+  </p>
+  <details class="mt-3 max-w-(--container-prose)">
+    <summary class="caption cursor-pointer text-ink-2 hover:text-ink">
+      How to read the assessments
+    </summary>
+    <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+      {ASSESSMENT_ORDER.map((s) => (
+        <div class="flex gap-2">
+          <dt class="shrink-0 pt-0.5">
+            <AssessmentGlyph status={s} />
+          </dt>
+          <dd>
+            <span class="font-semibold">{ASSESSMENT[s].label}.</span>{' '}
+            <span class="text-ink-2">{ASSESSMENT[s].description}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  </details>
+
+  {claims.length ? (
+    <ol class="mt-6 border-b border-ink">
+      {claims.map((claim) => (
+        <ClaimCard claim={claim} sourceNumbers={sourceNumbers} />
+      ))}
+    </ol>
+  ) : (
+    <EmptyState title="No claims assessed yet" class="mt-6">
+      We haven’t reviewed the claims on this product’s packaging yet. The label data above is still
+      sourced and dated.
+    </EmptyState>
+  )}
+  {earlier.length > 0 && (
+    <details class="mt-6 border-t border-ink pt-3">
+      <summary class="caption cursor-pointer text-ink-2 hover:text-ink">
+        Claims from earlier labels ({earlier.length})
+      </summary>
+      <p class="mt-2 max-w-(--container-prose) text-sm text-ink-3">
+        These appeared on an earlier version of the label. We keep them, with their assessments, so
+        changes stay auditable.
+      </p>
+      <ol class="mt-2 opacity-85">
+        {earlier.map((claim) => (
+          <ClaimCard claim={claim} sourceNumbers={sourceNumbers} />
+        ))}
+      </ol>
+    </details>
+  )}
+</div>

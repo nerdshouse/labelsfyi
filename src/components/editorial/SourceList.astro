@@ -1,0 +1,68 @@
+---
+import Icon from '@/components/ui/Icon.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import type { SourceData } from '@/lib/content/types';
+import { SOURCE_TYPE } from '@/lib/editorial/meta';
+import { formatAuthors, sourceHref } from '@/lib/editorial/sources';
+import { formatDate } from '@/lib/formatting/dates';
+
+/** Numbered source list. Items are addressable as #source-N for inline citations. */
+interface Props {
+  sources: SourceData[];
+}
+const { sources } = Astro.props;
+const year = (d: string | null) => (d ? new Date(d).getFullYear() : null);
+---
+
+{sources.length ? (
+  <ol class="divide-y divide-line border-y border-ink">
+    {sources.map((s, i) => {
+      const href = sourceHref(s);
+      const authors = formatAuthors(s.authors);
+      return (
+        <li
+          id={`source-${i + 1}`}
+          class="grid scroll-mt-32 grid-cols-[2.25rem_1fr] gap-x-2 py-3 target:bg-marker-soft/60"
+        >
+          <span class="num pt-0.5 font-mono text-sm text-ink-3">[{i + 1}]</span>
+          <div class="min-w-0 text-sm">
+            <p class="mb-1">
+              <span class="tag">{SOURCE_TYPE[s.sourceType]}</span>
+            </p>
+            <p class="leading-snug font-medium text-ink">
+              {href ? (
+                <a href={href} rel="noopener" target="_blank" class="link">
+                  {s.title}
+                  <Icon name="arrow-up-right" size={11} class="ml-0.5 inline align-baseline" />
+                </a>
+              ) : (
+                s.title
+              )}
+            </p>
+            <p class="mt-0.5 text-ink-3">
+              {[authors, s.publisher, year(s.publicationDate)].filter(Boolean).join(' · ')}
+              {s.doi && (
+                <>
+                  {' · '}
+                  <span class="font-mono text-xs">doi:{s.doi}</span>
+                </>
+              )}
+              {s.pmid && (
+                <>
+                  {' · '}
+                  <span class="font-mono text-xs">PMID {s.pmid}</span>
+                </>
+              )}
+            </p>
+            {s.accessedAt && <p class="text-xs text-ink-3">Accessed {formatDate(s.accessedAt)}</p>}
+            {s.notes && <p class="mt-1 text-xs text-ink-3 italic">{s.notes}</p>}
+          </div>
+        </li>
+      );
+    })}
+  </ol>
+) : (
+  <EmptyState title="No sources listed">
+    This page has no cited sources yet. Pages without sources are not eligible for review.
+  </EmptyState>
+)}

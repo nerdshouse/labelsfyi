@@ -1,0 +1,68 @@
+---
+import Wordmark from '@/components/ui/Wordmark.astro';
+import { contentSource } from '@/lib/content/client';
+
+const year = new Date().getFullYear();
+const cols = [
+  {
+    title: 'Explore',
+    links: [
+      { href: '/products', label: 'Products' },
+      { href: '/ingredients', label: 'Ingredients' },
+      { href: '/compare', label: 'Comparisons' },
+      { href: '/guides', label: 'Guides' },
+      { href: '/brands', label: 'Brands' },
+    ],
+  },
+  {
+    title: 'How we work',
+    links: [
+      { href: '/methodology', label: 'Methodology' },
+      { href: '/methodology#assessments', label: 'How we assess claims' },
+      { href: '/methodology#prices', label: 'How we calculate cost' },
+      { href: '/methodology#commercial', label: 'Affiliate disclosure' },
+      { href: '/methodology#corrections', label: 'Corrections & brand responses' },
+    ],
+  },
+];
+---
+
+<footer class="mt-24 border-t-[6px] border-ink bg-paper-2/60">
+  <div class="page grid gap-10 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
+    <div class="max-w-sm">
+      <Wordmark size="lg" />
+      <p class="mt-4 text-sm text-ink-2">
+        Independent, evidence-based breakdowns of supplement labels, built for Indian consumers.
+      </p>
+      <p class="mt-4 text-xs text-ink-3">
+        labels.fyi is for general information and is not medical advice. Speak to a doctor or
+        registered dietitian about your own health, especially if you are pregnant, breastfeeding or
+        take medication.
+      </p>
+    </div>
+    {cols.map((col) => (
+      <nav aria-label={col.title}>
+        <p class="caption mb-3 text-ink-3">{col.title}</p>
+        <ul class="space-y-2 text-sm">
+          {col.links.map((l) => (
+            <li>
+              <a href={l.href} class="link">
+                {l.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+  <div class="border-t border-line">
+    <div class="page flex flex-wrap items-center justify-between gap-2 py-4 text-xs text-ink-3">
+      <p>© {year} labels.fyi</p>
+      {contentSource === 'demo' && (
+        <p>
+          <span class="tag tag-marker">Demo data</span> Built from the local fictional demo dataset.
+        </p>
+      )}
+    </div>
+  </div>
+</footer>

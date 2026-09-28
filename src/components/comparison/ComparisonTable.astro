@@ -1,0 +1,268 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+import { amountFromKeyRows, convert, describeFailure, effectiveDoseCost } from '@/lib/calculations';
+import type { DoseBasis, ProductSummary } from '@/lib/content/types';
+import { FORMAT_LABEL, VEG } from '@/lib/editorial/meta';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { formatNumber, formatQuantity } from '@/lib/formatting/quantity';
+import { routes } from '@/lib/seo/site';
+
+/**
+ * Comparison built entirely from structured data. Two deliberate layouts:
+ *  - ≥ md: a dense, sortable table.
+ *  - < md: a ranked list; the headline metric sits right-aligned and large,
+ *    supporting facts in a compact grid under each product.
+ * Sorting is progressive enhancement; the server order is cost-per-dose asc.
+ */
+interface Props {
+  products: ProductSummary[];
+  basis: DoseBasis;
+}
+const { products, basis } = Astro.props;
+const activeName =
+  basis.kind === 'nutrient'
+    ? (basis.nutrientKey ?? 'amount')
+    : (basis.ingredient?.name ?? 'active');
+const doseLabel = `₹ per ${formatQuantity(basis)}`;
+
+const rows = products
+  .map((p) => {
+    const amount = amountFromKeyRows(p, basis);
+    const c = effectiveDoseCost(p, basis, amount);
+    // Display every amount in the basis unit so rows compare like for like (3,000 mg → 3 g).
+    const inBasis = amount ? convert(amount.amount, amount.unit, basis.unit) : null;
+    const display = amount && inBasis !== null ? { amount: inBasis, unit: basis.unit } : amount;
+    return { p, amount: display, ...c };
+  })
+  .sort((a, b) => {
+    const av = a.perDose.ok ? a.perDose.value.amount : Infinity;
+    const bv = b.perDose.ok ? b.perDose.value.amount : Infinity;
+    return av - bv;
+  });
+const best = rows.find((r) => r.perDose.ok);
+const sortVal = (r: { ok: boolean; value?: { amount: number } }) =>
+  r.ok && r.value ? String(r.value.amount) : '';
+---
+
+<div data-comparison>
+  <fieldset class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+    <legend class="caption float-left mr-1 text-ink-3">Sort by</legend>
+    {[
+      { key: 'dose', label: doseLabel },
+      { key: 'serving', label: '₹ per serving' },
+      { key: 'amount', label: `${activeName} per serving` },
+    ].map((s, i) => (
+      <label class="cursor-pointer">
+        <input
+          type="radio"
+          name="sort"
+          value={s.key}
+          checked={i === 0}
+          class="peer sr-only"
+          data-sort-control
+        />
+        <span class="inline-block border border-ink px-2.5 py-1 text-xs font-medium peer-checked:bg-ink peer-checked:text-paper peer-focus-visible:shadow-[0_0_0_3px_var(--color-marker)]">
+          {s.label}
+        </span>
+      </label>
+    ))}
+  </fieldset>
+
+  <!-- Desktop table -->
+  <div class="hidden md:block">
+    <table class="facts">
+      <caption class="sr-only">Products compared by{doseLabel}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="w-8">
+            #
+          </th>
+          <th scope="col">Product</th>
+          <th scope="col">Format</th>
+          <th scope="col" class="n">
+            {activeName} / serving
+          </th>
+          <th scope="col" class="n">
+            Servings
+          </th>
+          <th scope="col" class="n">
+            Observed price
+          </th>
+          <th scope="col" class="n">
+            ₹ / serving
+          </th>
+          <th scope="col" class="n bg-marker-soft/60 text-ink">
+            {doseLabel}
+          </th>
+          <th scope="col">Veg</th>
+        </tr>
+      </thead>
+      <tbody data-sort-body>
+        {rows.map((r, i) => (
+          <tr
+            data-sort-dose={sortVal(r.perDose)}
+            data-sort-serving={sortVal(r.perServing)}
+            data-sort-amount={r.amount ? String(-r.amount.amount) : ''}
+          >
+            <td class="num font-mono text-ink-3" data-rank>
+              {i + 1}
+            </td>
+            <th scope="row" class="py-3 text-left font-normal">
+              <span class="caption block text-ink-3">{r.p.brand.name}</span>
+              <a href={routes.product(r.p.slug)} class="link font-semibold">
+                {r.p.name}
+              </a>
+            </th>
+            <td class="text-ink-2">{FORMAT_LABEL[r.p.format] ?? r.p.format}</td>
+            <td class="n">
+              {r.amount ? (
+                formatQuantity(r.amount)
+              ) : (
+                <span class="text-xs text-ink-3">not disclosed</span>
+              )}
+            </td>
+            <td class="n">
+              {r.servings.ok ? (
+                <>
+                  {r.servings.value.basis === 'derived_from_pack_size' && '≈'}
+                  {formatNumber(r.servings.value.servings, 0)}
+                </>
+              ) : (
+                '—'
+              )}
+            </td>
+            <td class="n">
+              {r.snapshot ? (
+                <>
+                  {formatMoney({ amount: r.snapshot.price, currency: r.snapshot.currency })}
+                  <span class="block text-xs text-ink-3">
+                    {r.snapshot.merchant.name}, {formatDate(r.snapshot.capturedAt)}
+                  </span>
+                </>
+              ) : (
+                <span class="text-xs text-ink-3">none observed</span>
+              )}
+            </td>
+            <td class="n">
+              {r.perServing.ok ? formatMoney(r.perServing.value, { precise: true }) : '—'}
+            </td>
+            <td class="n bg-marker-soft/40 font-semibold">
+              {r.perDose.ok ? (
+                formatMoney(r.perDose.value, { precise: true })
+              ) : (
+                <span class="text-xs font-normal text-ink-3">
+                  {describeFailure(r.perDose.reason)}
+                </span>
+              )}
+            </td>
+            <td>
+              <VegMark status={r.p.vegStatus} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Mobile ranked list -->
+  <ol class="border-t-[3px] border-ink md:hidden" data-sort-body>
+    {rows.map((r, i) => (
+      <li
+        class="border-b border-line py-4"
+        data-sort-dose={sortVal(r.perDose)}
+        data-sort-serving={sortVal(r.perServing)}
+        data-sort-amount={r.amount ? String(-r.amount.amount) : ''}
+      >
+        <div class="grid grid-cols-[1.75rem_1fr_auto] items-start gap-x-2">
+          <span class="num pt-0.5 font-mono text-sm text-ink-3" data-rank>
+            {i + 1}
+          </span>
+          <div class="min-w-0">
+            <p class="caption flex items-center gap-1.5 text-ink-3">
+              <VegMark status={r.p.vegStatus} size={11} />
+              {r.p.brand.name}
+            </p>
+            <a href={routes.product(r.p.slug)} class="mt-0.5 block leading-snug font-semibold">
+              {r.p.name}
+            </a>
+          </div>
+          <div class="text-right">
+            {r.perDose.ok ? (
+              <p class="num font-mono text-lg font-semibold">
+                {formatMoney(r.perDose.value, { precise: true })}
+              </p>
+            ) : (
+              <p class="max-w-[8rem] text-xs text-ink-3">{describeFailure(r.perDose.reason)}</p>
+            )}
+            <p class="caption text-ink-3">per {formatQuantity(basis)}</p>
+          </div>
+        </div>
+        <dl class="num mt-3 ml-[2.25rem] grid grid-cols-3 gap-x-3 text-xs">
+          <div>
+            <dt class="text-ink-3">Per serving</dt>
+            <dd class="font-medium">{r.amount ? formatQuantity(r.amount) : 'not disclosed'}</dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">Servings</dt>
+            <dd class="font-medium">
+              {r.servings.ok
+                ? `${r.servings.value.basis === 'derived_from_pack_size' ? '≈' : ''}${formatNumber(r.servings.value.servings, 0)}`
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">₹/serving</dt>
+            <dd class="font-medium">
+              {r.perServing.ok ? formatMoney(r.perServing.value, { precise: true }) : '—'}
+            </dd>
+          </div>
+        </dl>
+        <p class="mt-2 ml-[2.25rem] text-xs text-ink-3">
+          {r.snapshot
+            ? `${formatMoney({ amount: r.snapshot.price, currency: r.snapshot.currency })} on ${r.snapshot.merchant.name}, ${formatDate(r.snapshot.capturedAt)}`
+            : 'No price observed'}
+          {' · '}
+          {VEG[r.p.vegStatus].label}
+        </p>
+      </li>
+    ))}
+  </ol>
+
+  {best && best.perDose.ok && (
+    <p class="mt-4 text-sm text-ink-2">
+      Lowest observed cost {doseLabel.replace('₹ ', '')}:{' '}
+      <span class="marker font-semibold text-ink">
+        {best.p.brand.name} {best.p.name}, {formatMoney(best.perDose.value, { precise: true })}
+      </span>
+      . Cost is one factor; check form, veg status and the label before buying.
+    </p>
+  )}
+</div>
+
+<script>
+  import { track } from '@/lib/analytics/events';
+
+  document.querySelectorAll<HTMLElement>('[data-comparison]').forEach((root) => {
+    const bodies = root.querySelectorAll<HTMLElement>('[data-sort-body]');
+    root.querySelectorAll<HTMLInputElement>('[data-sort-control]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const key = `sort${input.value[0]!.toUpperCase()}${input.value.slice(1)}`;
+        bodies.forEach((body) => {
+          const items = [...body.children] as HTMLElement[];
+          items.sort((a, b) => {
+            const av = a.dataset[key] ? Number(a.dataset[key]) : Infinity;
+            const bv = b.dataset[key] ? Number(b.dataset[key]) : Infinity;
+            return av - bv;
+          });
+          items.forEach((el, i) => {
+            const rank = el.querySelector('[data-rank]');
+            if (rank) rank.textContent = String(i + 1);
+            body.appendChild(el);
+          });
+        });
+        track('comparison_view', { sort: input.value });
+      });
+    });
+  });
+</script>

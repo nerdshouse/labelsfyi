@@ -1,0 +1,79 @@
+---
+import ProductRow from '@/components/product/ProductRow.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import Icon from '@/components/ui/Icon.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import type { CategoryDetail } from '@/lib/content/types';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.categories.map((category) => ({
+    params: { slug: category.slug },
+    props: { category },
+  }));
+}
+interface Props {
+  category: CategoryDetail;
+}
+const { category: c } = Astro.props;
+const crumbs = [
+  { name: 'Products', href: '/products' },
+  { name: c.name, href: routes.category(c.slug) },
+];
+---
+
+<BaseLayout
+  title={`${c.name}: labels decoded & compared`}
+  description={c.description}
+  canonicalPath={routes.category(c.slug)}
+  noindex={c.products.length === 0}
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">Category</p>
+      <h1 class="display mt-2">{c.name}</h1>
+      {c.description && <p class="lede mt-4">{c.description}</p>}
+    </header>
+    {c.comparisons.length > 0 && (
+      <section class="mt-10">
+        <SectionHead id="compare" kicker="Compare" title="Comparisons" level={3} />
+        <ul class="grid gap-x-8 md:grid-cols-2">
+          {c.comparisons.map((cmp) => (
+            <li class="border-b border-line">
+              <a
+                href={routes.comparison(cmp.slug)}
+                class="flex items-center justify-between gap-3 py-3 hover:underline"
+              >
+                <span>
+                  <span class="font-semibold">{cmp.title}</span>
+                  <span class="block text-sm text-ink-3">{cmp.productCount} products</span>
+                </span>
+                <Icon name="arrow-right" size={14} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+    <section class="mt-12">
+      <SectionHead
+        id="products"
+        kicker="Products"
+        title={`${c.products.length} product${c.products.length === 1 ? '' : 's'}`}
+      />
+      {c.products.length ? (
+        c.products.map((p) => <ProductRow product={p} headingLevel="h2" />)
+      ) : (
+        <EmptyState title="No products in this category yet">
+          We’re working on it. Try searching instead.
+        </EmptyState>
+      )}
+    </section>
+  </div>
+</BaseLayout>

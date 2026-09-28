@@ -1,0 +1,7 @@
+packages:
+  - '.'
+  - 'sanity'
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd

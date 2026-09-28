@@ -1,0 +1,215 @@
+import type { RawDoc } from './helpers.ts';
+import { keyedRef, published, pt, ref, slug, weakRef } from './helpers.ts';
+import { PRODUCT_IDS } from './products.ts';
+
+/**
+ * Guides, comparisons and editorial reviews for the demo dataset.
+ * Guides are procedural ("how to read a label") and avoid health claims.
+ */
+
+export const guides: RawDoc[] = [
+  {
+    _id: 'guide.read-a-supplement-label',
+    _type: 'guide',
+    title: 'How to read a supplement label in India',
+    slug: slug('how-to-read-a-supplement-label-in-india'),
+    dek: 'Where to look, in what order, and which numbers matter. A five-minute routine for any tub, bottle or strip.',
+    publishedAt: '2026-04-02T09:00:00Z',
+    body: pt(
+      'Indian supplement packs carry a lot of information, and the most useful parts are rarely on the front. This is the order we read a label in.',
+      '## 1. Start with the serving size',
+      'Every number on the panel is **per serving**, and scoop sizes differ widely between brands. A 24 g protein figure means little until you know whether the scoop is 30 g or 45 g. Look for the serving size and, if it is printed, the number of servings in the pack.',
+      '## 2. Read the nutrition or supplement facts panel',
+      'Most Indian labels show values **per 100 g and per serving** side by side. Use per 100 g to compare products and per serving to know what you actually consume.',
+      '- For protein powders, check protein, total sugars and added sugars.',
+      '- For single-nutrient supplements, check the amount and the unit (mg, mcg, IU).',
+      '## 3. Read the ingredient list in full',
+      'Ingredients are listed in descending order of weight. Additives often appear as INS numbers, such as INS 955 (sucralose). Look for anything you want to avoid, including gelatin in capsules and softgels.',
+      '## 4. Watch for proprietary blends',
+      'A "blend" with a single total amount does not tell you how much of each ingredient it contains. You can’t compare a blend against studied doses.',
+      '## 5. Check the veg mark and the FSSAI licence',
+      'The green or brown symbol near the product name shows vegetarian or non-vegetarian status. The FSSAI licence number identifies the licensed food business. See our [guide to veg marks](/guides/how-to-check-whether-a-supplement-is-vegetarian).',
+      '## 6. Only then read the front',
+      'Front-of-pack claims are marketing. Check each one against the panel: does "30 g protein" match the nutrition table, and for what scoop size?',
+    ),
+    sources: [keyedRef('source.fssai')],
+    relatedIngredients: [
+      keyedRef('ingredient.whey-protein'),
+      keyedRef('ingredient.creatine-monohydrate'),
+    ],
+    relatedProducts: [],
+    ...published('2026-04-02', '2026-09-05'),
+  },
+  {
+    _id: 'guide.check-vegetarian',
+    _type: 'guide',
+    title: 'How to check whether a supplement is vegetarian',
+    slug: slug('how-to-check-whether-a-supplement-is-vegetarian'),
+    dek: 'The veg mark, capsule shells, softgels, and ingredients that are easy to miss.',
+    publishedAt: '2026-04-09T09:00:00Z',
+    body: pt(
+      'In India, packaged food and supplements use a symbol to show vegetarian or non-vegetarian status. It is a useful first check, but it is not the only one.',
+      '## The symbols',
+      '- **Vegetarian:** a green filled circle inside a green square outline.',
+      '- **Non-vegetarian:** a brown symbol inside a brown square outline. Current labels use a triangle; older packs may show a brown circle.',
+      '## Where supplements commonly use animal-derived ingredients',
+      '- **Capsule shells:** hard capsules are often gelatin. Vegetarian alternatives are usually listed as HPMC or "vegetarian capsule".',
+      '- **Softgels:** most are gelatin-based.',
+      '- **Vitamin D3:** usually from lanolin or fish oil. Vegan D3 is typically lichen-derived.',
+      '- **Omega-3:** fish oil and krill oil are non-vegetarian; algal oil is not.',
+      '## Vegetarian is not vegan',
+      'Whey, casein and other milk-derived ingredients are vegetarian but not vegan.',
+      '## How labels.fyi records veg status',
+      'We never infer vegetarian status. Each product has one of four statuses, **Vegetarian, Non-vegetarian, Vegan or Unknown**, with a written reason and the label observation it is based on. If we could not verify it from the label, we say Unknown.',
+    ),
+    sources: [keyedRef('source.fssai')],
+    relatedIngredients: [keyedRef('ingredient.vitamin-d3'), keyedRef('ingredient.omega-3')],
+    relatedProducts: [keyedRef('product.testbed-creatine-caps'), keyedRef('product.testbed-d3')],
+    ...published('2026-04-09', '2026-09-05'),
+  },
+  {
+    _id: 'guide.cost-per-serving',
+    _type: 'guide',
+    title: 'How to calculate cost per serving',
+    slug: slug('how-to-calculate-cost-per-serving'),
+    dek: 'Pack price tells you almost nothing. Here is the arithmetic we use on every product page.',
+    publishedAt: '2026-05-01T09:00:00Z',
+    body: pt(
+      'Two tubs at the same price can differ by 2× in what you actually get. These are the three calculations labels.fyi shows.',
+      '## Cost per serving',
+      '**Pack price ÷ servings per pack.** A ₹1,499 tub with 30 servings costs ₹49.97 per serving. If the label does not print servings, we divide the pack weight by the serving size, and say so.',
+      '## Cost per gram',
+      '**Pack price ÷ pack weight in grams.** Useful for powders, but it counts flavouring and fillers as well as the active ingredient.',
+      '## Cost per effective dose',
+      'This is the fairest comparison. Work out how many reference doses the pack contains, then divide the price.',
+      '1. Amount of the active per serving × servings = total active in the pack.',
+      '2. Total active ÷ reference dose (for example 5 g creatine) = doses per pack.',
+      '3. Pack price ÷ doses per pack = cost per dose.',
+      'A 300 g flavoured creatine with 3 g creatine per scoop and 75 scoops contains 225 g creatine, which is 45 doses of 5 g. At ₹699 that is ₹15.53 per 5 g.',
+      '## What we do not do',
+      'We never estimate a missing amount. If a label hides the dose in a proprietary blend, cost per dose is shown as unavailable.',
+    ),
+    sources: [],
+    relatedIngredients: [keyedRef('ingredient.creatine-monohydrate')],
+    relatedProducts: [],
+    ...published('2026-05-01', '2026-09-05'),
+  },
+  {
+    _id: 'guide.compare-protein',
+    _type: 'guide',
+    title: 'How to compare protein powders',
+    slug: slug('how-to-compare-protein-powders'),
+    dek: 'Protein per serving, protein per 100 g, sugars, blends and cost per 25 g of protein.',
+    publishedAt: '2026-05-20T09:00:00Z',
+    body: pt(
+      'Protein powders are marketed on grams of protein per scoop, but scoops are not standard. Compare them on the numbers that do not depend on scoop size.',
+      '## Protein per 100 g',
+      'This tells you how much of the powder is protein. Higher values generally mean less carbohydrate, fat and filler.',
+      '## Cost per 25 g of protein',
+      'The most useful single number when comparing prices. labels.fyi calculates it from the declared protein per serving and the observed pack price.',
+      '## Sugars and sweeteners',
+      'Check total sugars and added sugars on the panel, and the sweetener in the ingredient list.',
+      '## Blends and disclosures',
+      'If a product lists a "protein blend" without proportions, you cannot tell how much is isolate versus concentrate. A proprietary "amino" blend also hides individual amino acid amounts.',
+      '## Do you need one?',
+      'That depends on how much protein your diet already provides. See our [whey protein reference](/ingredients/whey-protein) for studied intakes, and speak to a registered dietitian for advice about your own diet.',
+    ),
+    sources: [keyedRef('source.issn-protein-2017')],
+    relatedIngredients: [keyedRef('ingredient.whey-protein')],
+    relatedProducts: [keyedRef('product.specimen-whey'), keyedRef('product.sampleworks-whey')],
+    ...published('2026-05-20', '2026-09-05'),
+  },
+];
+
+export const comparisons: RawDoc[] = [
+  {
+    _id: 'comparison.creatine-cost-per-5g',
+    _type: 'comparison',
+    title: 'Creatine: what you actually pay per 5 g',
+    slug: slug('creatine-cost-per-5g'),
+    dek: 'Three creatine products compared on creatine per serving, veg status and cost per 5 g of creatine.',
+    category: ref('category.creatine'),
+    products: [
+      keyedRef('product.specimen-creatine'),
+      keyedRef('product.sampleworks-creatine'),
+      keyedRef('product.testbed-creatine-caps'),
+    ],
+    doseBasis: {
+      _type: 'doseBasis',
+      kind: 'ingredient',
+      ingredient: ref('ingredient.creatine-monohydrate'),
+      nutrientKey: null,
+      amount: 5,
+      unit: 'g',
+      label: 'per 5 g creatine',
+    },
+    intro: pt(
+      '5 g of creatine monohydrate a day is a commonly studied maintenance amount. Scoop sizes, flavourings and capsule counts make pack prices hard to compare, so this table normalises every product to the cost of 5 g of creatine.',
+    ),
+    methodology: pt(
+      'Cost per 5 g = lowest in-stock observed price ÷ (servings × creatine per serving ÷ 5 g). Prices are dated observations, not live prices. Creatine per serving comes from the current label panel.',
+    ),
+    ...published('2026-05-25', '2026-09-20'),
+  },
+  {
+    _id: 'comparison.whey-cost-per-25g-protein',
+    _type: 'comparison',
+    title: 'Whey protein: cost per 25 g of protein',
+    slug: slug('whey-protein-cost-per-25g-protein'),
+    dek: 'Protein per serving, blends and what 25 g of protein costs.',
+    category: ref('category.protein-powder'),
+    products: [keyedRef('product.specimen-whey'), keyedRef('product.sampleworks-whey')],
+    doseBasis: {
+      _type: 'doseBasis',
+      kind: 'nutrient',
+      ingredient: null,
+      nutrientKey: 'protein',
+      amount: 25,
+      unit: 'g',
+      label: 'per 25 g protein',
+    },
+    intro: pt(
+      'Protein powders are compared on declared protein per serving. Where servings per pack are not printed, they are derived from pack weight ÷ serving size.',
+    ),
+    methodology: pt(
+      'Cost per 25 g protein = lowest in-stock observed price ÷ (servings × protein per serving ÷ 25 g). Protein per serving is taken from the nutrition information panel.',
+    ),
+    ...published('2026-06-10', '2026-09-20'),
+  },
+];
+
+const review = (
+  content: string,
+  reviewedAt: string,
+  nextReviewAt: string,
+  id?: string,
+): RawDoc => ({
+  _id: `review.${id ?? content.replace(/^[a-z]+\./, '')}.${reviewedAt}`,
+  _type: 'editorialReview',
+  content: weakRef(content),
+  reviewer: ref('reviewer.demo'),
+  reviewedAt: `${reviewedAt}T12:00:00Z`,
+  nextReviewAt: `${nextReviewAt}T00:00:00Z`,
+  status: 'approved',
+  scope: 'dietitian_review',
+  notes: 'Demo review record.',
+  isDemo: true,
+});
+
+export const reviews: RawDoc[] = [
+  ...PRODUCT_IDS.filter((id) => id !== 'product.sampleworks-whey').map((id) =>
+    review(id, '2026-09-21', '2027-03-21'),
+  ),
+  // Deliberately overdue: exercises the "review due" state.
+  review('product.sampleworks-whey', '2026-02-20', '2026-08-01'),
+  ...[
+    'ingredient.creatine-monohydrate',
+    'ingredient.whey-protein',
+    'ingredient.ashwagandha',
+    'ingredient.vitamin-d3',
+    'ingredient.omega-3',
+    'ingredient.magnesium',
+  ].map((id) => review(id, '2026-09-10', '2027-03-10')),
+  ...guides.map((g) => review(g._id, '2026-09-05', '2027-03-05')),
+  ...comparisons.map((c) => review(c._id, '2026-09-20', '2026-12-20')),
+];

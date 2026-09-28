@@ -1,0 +1,353 @@
+---
+import WhereToBuy from '@/components/affiliate/WhereToBuy.astro';
+import ClaimList from '@/components/editorial/ClaimList.astro';
+import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
+import ReviewLine from '@/components/editorial/ReviewLine.astro';
+import SourceList from '@/components/editorial/SourceList.astro';
+import UpdateHistory from '@/components/editorial/UpdateHistory.astro';
+import AtAGlance from '@/components/product/AtAGlance.astro';
+import CostBreakdown from '@/components/product/CostBreakdown.astro';
+import LabelPanel from '@/components/product/LabelPanel.astro';
+import PackVisual from '@/components/product/PackVisual.astro';
+import ProductRow from '@/components/product/ProductRow.astro';
+import VegStatusBlock from '@/components/product/VegStatusBlock.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import Icon from '@/components/ui/Icon.astro';
+import InPageNav from '@/components/ui/InPageNav.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { amountPerServingFor } from '@/lib/calculations';
+import { getContentGraph } from '@/lib/content/repository';
+import type { ProductDetail } from '@/lib/content/types';
+import { productHistory, productSources, keyPerServing } from '@/lib/editorial/product';
+import { formatDate } from '@/lib/formatting/dates';
+import { productPage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.products.map((product) => ({ params: { slug: product.slug }, props: { product } }));
+}
+
+interface Props {
+  product: ProductDetail;
+}
+const { product: p } = Astro.props;
+const graph = await getContentGraph();
+
+const sources = productSources(p);
+const sourceNumbers = new Map(sources.map((s, i) => [s._id, i + 1]));
+const currentPanels = p.panels.filter((x) => x.isCurrent);
+const factPanels = currentPanels.filter(
+  (x) =>
+    x.panelType === 'nutrition' ||
+    x.panelType === 'supplement_facts' ||
+    x.panelType === 'ingredients',
+);
+const textPanels = currentPanels.filter((x) => !factPanels.includes(x));
+const earlierPanels = p.panels.filter((x) => !x.isCurrent);
+// Reformulation / label change: tell people holding an older pack.
+const currentCapture = currentPanels
+  .map((x) => x.capturedAt)
+  .sort()
+  .at(-1);
+const earlierCapture = earlierPanels
+  .map((x) => x.capturedAt)
+  .sort()
+  .at(-1);
+const labelChanged = Boolean(currentCapture && earlierCapture && earlierCapture < currentCapture);
+const currentClaimCount = p.claims.filter((c) => c.status !== 'superseded').length;
+
+// Use the dose basis of the first comparison this product appears in.
+const comparison = graph.comparisons.find(
+  (c) => c.products.some((x) => x._id === p._id) && c.doseBasis,
+);
+const doseBasis = comparison?.doseBasis ?? null;
+const amountPerServing = doseBasis ? amountPerServingFor(p.panels, doseBasis) : null;
+const peers = comparison?.products.filter((x) => x._id !== p._id) ?? [];
+const related = p.related.filter((r) => !peers.some((x) => x._id === r._id));
+
+const fullName = `${p.brand.name} ${p.name}`;
+const perServing = keyPerServing(p);
+const description =
+  p.seoDescription ??
+  `${fullName}: what the label says${perServing.length ? ` (${perServing.join(', ')} per serving)` : ''}, veg status, claims checked against evidence, and cost per serving.`;
+
+const crumbs = [
+  { name: 'Products', href: '/products' },
+  ...(p.category ? [{ name: p.category.name, href: routes.category(p.category.slug) }] : []),
+  { name: p.name, href: routes.product(p.slug) },
+];
+const nav = [
+  { id: 'label', label: 'Label' },
+  { id: 'veg', label: 'Veg status' },
+  { id: 'claims', label: `Claims (${currentClaimCount})` },
+  { id: 'cost', label: 'Cost' },
+  { id: 'compare', label: 'Compare' },
+  { id: 'buy', label: 'Where to buy' },
+  { id: 'sources', label: 'Sources' },
+  { id: 'history', label: 'History' },
+];
+---
+
+<BaseLayout
+  title={p.seoTitle ?? `${fullName}: label, claims & cost per serving`}
+  description={description}
+  canonicalPath={routes.product(p.slug)}
+  noindex={p.noindex}
+  crumbs={crumbs}
+  jsonLd={productPage(p)}
+  image={p.labelImages[0] ? { url: p.labelImages[0].url, alt: p.labelImages[0].alt } : null}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {p.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This product page" />
+      </div>
+    )}
+
+    <div class="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12">
+      <div>
+        <p class="caption flex flex-wrap gap-x-2 text-ink-3">
+          <a href={routes.brand(p.brand.slug)} class="text-ink hover:underline">
+            {p.brand.name}
+          </a>
+          {p.category && (
+            <>
+              <span aria-hidden="true">/</span>
+              <a href={routes.category(p.category.slug)} class="hover:underline">
+                {p.category.name}
+              </a>
+            </>
+          )}
+        </p>
+        <h1 class="h1 mt-2">{p.name}</h1>
+        {p.description && (
+          <p class="lede mt-3 max-w-(--container-prose) max-sm:text-base">{p.description}</p>
+        )}
+        <div class="mt-6">
+          <AtAGlance product={p} />
+        </div>
+        <div class="mt-4">
+          <ReviewLine meta={p} verifiedAt={p.lastVerifiedAt} />
+        </div>
+        {p.marketStatus === 'discontinued' && (
+          <p class="notice mt-4" role="note">
+            <strong class="font-semibold text-ink">Discontinued.</strong> This product appears to
+            have been discontinued{p.discontinuedAt ? ` (${formatDate(p.discontinuedAt)})` : ''}. We
+            keep the page as a record of its last known label.
+          </p>
+        )}
+        {labelChanged && (
+          <p class="notice mt-4" role="note">
+            <strong class="font-semibold text-ink">The label has changed.</strong> This page
+            reflects the label captured {formatDate(currentCapture)}. An earlier label (captured{' '}
+            {formatDate(earlierCapture)}) had different details. If your pack looks different,{' '}
+            <a href="#earlier-labels" class="link">
+              compare with the earlier label
+            </a>
+            .
+          </p>
+        )}
+      </div>
+      <aside class:list={[!p.image && 'max-lg:hidden']}>
+        <div class="max-lg:max-w-[14rem] lg:sticky lg:top-24">
+          <PackVisual product={p} image={p.image} eager />
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <InPageNav items={nav} />
+
+  <div class="page mt-12 space-y-20">
+    <section aria-labelledby="label-h">
+      <SectionHead id="label" kicker="01 · The label" title="What the label says" />
+      {currentPanels.length ? (
+        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+          <div class="space-y-6">
+            {factPanels.map((panel) => (
+              <LabelPanel
+                panel={panel}
+                sourceNumber={panel.source ? sourceNumbers.get(panel.source._id) : undefined}
+              />
+            ))}
+          </div>
+          <div class="space-y-6">
+            {textPanels.map((panel) => (
+              <LabelPanel
+                panel={panel}
+                sourceNumber={panel.source ? sourceNumbers.get(panel.source._id) : undefined}
+              />
+            ))}
+            {p.ingredients.length > 0 && (
+              <div class="rule-medium pt-3">
+                <p class="caption text-ink-3">Ingredient references</p>
+                <ul class="mt-2">
+                  {p.ingredients.map((i) => (
+                    <li class="border-b border-line">
+                      <a
+                        href={routes.ingredient(i.slug)}
+                        class="flex items-center justify-between py-2.5 font-medium hover:underline"
+                      >
+                        {i.name}
+                        <Icon name="arrow-right" size={14} />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {p.manufacturer && (
+                <div>
+                  <dt class="caption text-ink-3">Manufacturer</dt>
+                  <dd>{p.manufacturer}</dd>
+                </div>
+              )}
+              {p.countryOfOrigin && (
+                <div>
+                  <dt class="caption text-ink-3">Country of origin</dt>
+                  <dd>{p.countryOfOrigin}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        </div>
+      ) : (
+        <EmptyState title="No label captured yet">
+          We haven’t captured this product’s label panels. Amounts and ingredients will appear once
+          a dated label photo has been transcribed and checked.
+        </EmptyState>
+      )}
+      {earlierPanels.length > 0 && (
+        <details id="earlier-labels" class="mt-6 scroll-mt-40 border-t border-ink pt-3">
+          <summary class="caption cursor-pointer text-ink-2 hover:text-ink">
+            Earlier label versions ({earlierPanels.length})
+          </summary>
+          <p class="mt-2 max-w-(--container-prose) text-sm text-ink-3">
+            We keep superseded label captures so changes stay auditable.
+          </p>
+          <div class="mt-4 grid gap-6 opacity-80 lg:grid-cols-2">
+            {earlierPanels.map((panel) => (
+              <LabelPanel
+                panel={panel}
+                sourceNumber={panel.source ? sourceNumbers.get(panel.source._id) : undefined}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
+
+    <section aria-labelledby="veg-h">
+      <SectionHead id="veg" kicker="02 · Veg status" title="Is it vegetarian?" />
+      <VegStatusBlock product={p} sourceNumbers={sourceNumbers} />
+    </section>
+
+    <section>
+      <SectionHead id="claims" kicker="03 · Claims" title="Label claims vs. the evidence" />
+      <ClaimList claims={p.claims} sourceNumbers={sourceNumbers} />
+    </section>
+
+    <section>
+      <SectionHead id="cost" kicker="04 · Cost" title="What it actually costs" />
+      <CostBreakdown product={p} doseBasis={doseBasis} amountPerServing={amountPerServing} />
+    </section>
+
+    <section>
+      <SectionHead id="compare" kicker="05 · Compare" title="How it compares">
+        {comparison && (
+          <a
+            slot="aside"
+            href={routes.comparison(comparison.slug)}
+            class="link text-sm font-medium"
+          >
+            Full comparison →
+          </a>
+        )}
+      </SectionHead>
+      {comparison && peers.length > 0 && (
+        <div>
+          <p class="mb-2 text-sm text-ink-2">
+            Appears in{' '}
+            <a href={routes.comparison(comparison.slug)} class="link font-medium text-ink">
+              {comparison.title}
+            </a>
+          </p>
+          {peers.map((x) => (
+            <ProductRow product={x} />
+          ))}
+        </div>
+      )}
+      {related.length > 0 && (
+        <div class="mt-8">
+          <p class="caption mb-1 text-ink-3">More in {p.category?.name ?? 'this category'}</p>
+          {related.map((x) => (
+            <ProductRow product={x} />
+          ))}
+        </div>
+      )}
+      {!comparison && related.length === 0 && (
+        <EmptyState title="Nothing to compare yet">
+          We haven’t published similar products in this category yet.
+        </EmptyState>
+      )}
+      {p.guides.length > 0 && (
+        <div class="mt-8">
+          <p class="caption mb-2 text-ink-3">Guides</p>
+          <ul class="grid gap-x-8 sm:grid-cols-2">
+            {p.guides.map((g) => (
+              <li class="border-b border-line">
+                <a
+                  href={routes.guide(g.slug)}
+                  class="flex items-center justify-between gap-3 py-3 font-medium hover:underline"
+                >
+                  {g.title}
+                  <Icon name="arrow-right" size={14} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+
+    <section>
+      <SectionHead id="buy" kicker="06 · Retailers" title="Where to buy" />
+      <WhereToBuy product={p} />
+    </section>
+
+    <section>
+      <SectionHead id="sources" kicker="07 · Sources" title="Sources" />
+      <SourceList sources={sources} />
+    </section>
+
+    <section>
+      <SectionHead id="history" kicker="08 · Provenance" title="Review & update history" />
+      <ReviewerBlock meta={p} />
+      <div class="mt-10">
+        <UpdateHistory events={productHistory(p)} />
+      </div>
+      <p class="notice-quiet mt-8">
+        <strong class="font-semibold text-ink">Spotted an error, or represent this brand?</strong>
+        Send a correction with a label photo or certificate and we’ll review it and log any change
+        here.{' '}
+        <a href="/methodology#corrections" class="link">
+          Corrections policy
+        </a>
+      </p>
+    </section>
+  </div>
+
+  <div hidden data-product-view={p._id} data-product-slug={p.slug}></div>
+  <script>
+    import { track } from '@/lib/analytics/events';
+    const el = document.querySelector<HTMLElement>('[data-product-view]');
+    if (el)
+      track('product_view', { product: el.dataset.productView, slug: el.dataset.productSlug });
+  </script>
+</BaseLayout>

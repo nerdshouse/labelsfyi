@@ -1,0 +1,258 @@
+---
+import DecodedLabel from '@/components/home/DecodedLabel.astro';
+import ProductRow from '@/components/product/ProductRow.astro';
+import SearchBox from '@/components/search/SearchBox.astro';
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import Icon from '@/components/ui/Icon.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import { ASSESSMENT_ORDER } from '@/lib/editorial/meta';
+import { formatDate } from '@/lib/formatting/dates';
+import { website } from '@/lib/seo/jsonld';
+import { routes, SITE } from '@/lib/seo/site';
+
+const graph = await getContentGraph();
+const { products, ingredients, comparisons, guides } = graph;
+
+const featuredProducts = (
+  products.some((p) => p.featured) ? products.filter((p) => p.featured) : products
+).slice(0, 5);
+const featuredIngredients = (
+  ingredients.some((i) => i.featured) ? ingredients.filter((i) => i.featured) : ingredients
+).slice(0, 6);
+const latest = [...products].sort((a, b) => b._updatedAt.localeCompare(a._updatedAt)).slice(0, 4);
+const hero =
+  [...products]
+    .filter((p) => p.claims.length && p.prices.length)
+    .sort(
+      (a, b) => Number(b.featured) - Number(a.featured) || b.claims.length - a.claims.length,
+    )[0] ?? null;
+
+const explore = [
+  { href: '/products', label: 'Products', count: products.length, note: 'Label breakdowns' },
+  {
+    href: '/ingredients',
+    label: 'Ingredients',
+    count: ingredients.length,
+    note: 'What it is, what’s studied',
+  },
+  {
+    href: '/compare',
+    label: 'Comparisons',
+    count: comparisons.length,
+    note: 'Cost per effective dose',
+  },
+  { href: '/guides', label: 'Guides', count: guides.length, note: 'How to read a label' },
+];
+const tries = ['creatine', 'whey protein', 'vitamin D3', 'ashwagandha'];
+---
+
+<BaseLayout description={SITE.description} canonicalPath="/" jsonLd={[website()]} hideHeaderSearch>
+  <!-- Hero -->
+  <section class="page grid gap-12 pt-10 pb-14 sm:pt-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-16 lg:pt-20">
+    <div>
+      <p class="caption text-ink-3">labels.fyi · Supplement label intelligence for India</p>
+      <h1 class="display mt-5">
+        Decode the label. Know what’s <span class="marker">actually</span> inside.
+      </h1>
+      <p class="lede mt-6 max-w-xl">
+        Evidence-based breakdowns of supplement labels, ingredients, claims and prices, built for
+        Indian consumers.
+      </p>
+      <div class="mt-8 max-w-2xl">
+        <SearchBox variant="hero" id="hero-search" />
+        <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+          <span class="caption">Try</span>
+          {tries.map((t) => (
+            <a href={routes.search(t)} class="link text-ink-2">
+              {t}
+            </a>
+          ))}
+        </p>
+      </div>
+    </div>
+    <div class="lg:pt-6">{hero && <DecodedLabel product={hero} />}</div>
+  </section>
+
+  <!-- Explore -->
+  <nav aria-label="Explore" class="border-y-[6px] border-ink bg-sheet">
+    <ul class="page grid grid-cols-2 lg:grid-cols-4">
+      {explore.map((e, i) => (
+        <li
+          class:list={[
+            'border-line',
+            i % 2 === 1 && 'border-l',
+            i > 1 && 'border-t lg:border-t-0',
+            i > 0 && 'lg:border-l',
+          ]}
+        >
+          <a
+            href={e.href}
+            class="group flex h-full flex-col gap-1 px-3 py-5 hover:bg-paper-2 sm:px-5"
+          >
+            <span class="caption text-ink-3">Explore</span>
+            <span class="flex items-baseline justify-between gap-2">
+              <span class="text-lg font-semibold group-hover:underline">{e.label}</span>
+              <span class="num font-mono text-2xl font-semibold">{e.count}</span>
+            </span>
+            <span class="text-xs text-ink-3">{e.note}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+
+  <div class="page mt-16 grid gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14">
+    <section>
+      <SectionHead id="featured" kicker="Products" title="Featured breakdowns">
+        <a slot="aside" href="/products" class="link text-sm font-medium">
+          All products →
+        </a>
+      </SectionHead>
+      <div>
+        {featuredProducts.map((p) => (
+          <ProductRow product={p} />
+        ))}
+      </div>
+    </section>
+
+    <section>
+      <SectionHead id="ingredients" kicker="Ingredients" title="Ingredient references">
+        <a slot="aside" href="/ingredients" class="link text-sm font-medium">
+          A–Z →
+        </a>
+      </SectionHead>
+      <ul>
+        {featuredIngredients.map((i) => (
+          <li class="border-b border-line">
+            <a
+              href={routes.ingredient(i.slug)}
+              class="group grid grid-cols-[1fr_auto] items-baseline gap-x-3 py-3"
+            >
+              <span class="font-semibold group-hover:underline">{i.name}</span>
+              <span class="num font-mono text-xs text-ink-3">{i.products.length} products</span>
+              <span class="col-span-2 truncate font-mono text-xs text-ink-3">
+                {i.commonLabelNames.slice(0, 3).join(' · ')}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+
+  <div class="page mt-20 grid gap-16 lg:grid-cols-2 lg:gap-14">
+    <section>
+      <SectionHead id="latest" kicker="Updated" title="Latest breakdowns" level={2} />
+      <ol>
+        {latest.map((p) => (
+          <li class="border-b border-line">
+            <a href={routes.product(p.slug)} class="group grid grid-cols-[6.5rem_1fr] gap-x-3 py-3">
+              <time datetime={p._updatedAt} class="num pt-0.5 font-mono text-xs text-ink-3">
+                {formatDate(p._updatedAt)}
+              </time>
+              <span>
+                <span class="caption block text-ink-3">{p.brand.name}</span>
+                <span class="font-medium group-hover:underline">{p.name}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+    <section>
+      <SectionHead id="guides" kicker="Guides" title="Learn to read a label" level={2}>
+        <a slot="aside" href="/guides" class="link text-sm font-medium">
+          All guides →
+        </a>
+      </SectionHead>
+      <ul>
+        {guides.slice(0, 4).map((g) => (
+          <li class="border-b border-line">
+            <a href={routes.guide(g.slug)} class="group block py-3">
+              <span class="flex items-center justify-between gap-3 font-semibold group-hover:underline">
+                {g.title}
+                <Icon name="arrow-right" size={14} />
+              </span>
+              {g.dek && <span class="mt-0.5 block text-sm text-ink-3">{g.dek}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+      {comparisons.length > 0 && (
+        <div class="mt-8 border-2 border-ink bg-sheet p-4">
+          <p class="caption text-ink-3">Compare</p>
+          <ul class="mt-1">
+            {comparisons.map((c) => (
+              <li>
+                <a
+                  href={routes.comparison(c.slug)}
+                  class="flex items-center justify-between gap-3 py-1.5 font-medium hover:underline"
+                >
+                  {c.title}
+                  <span class="num shrink-0 font-mono text-xs text-ink-3">
+                    {c.productCount} products
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  </div>
+
+  <!-- Method / trust -->
+  <section class="mt-24 bg-ink text-paper" aria-labelledby="method-title">
+    <div class="page py-16">
+      <p class="caption text-paper/60">How labels.fyi works</p>
+      <h2 id="method-title" class="h1 mt-3 max-w-2xl">
+        Trust comes from showing the work.
+      </h2>
+      <ol class="mt-12 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+        <li class="border-t border-paper/30 pt-4">
+          <p class="num font-mono text-sm text-marker">01</p>
+          <p class="mt-2 font-semibold">We read the label, not the ad.</p>
+          <p class="mt-1 text-sm text-paper/75">
+            Every amount comes from a dated label capture. Changes are logged, never overwritten.
+          </p>
+        </li>
+        <li class="border-t border-paper/30 pt-4">
+          <p class="num font-mono text-sm text-marker">02</p>
+          <p class="mt-2 font-semibold">Claims meet evidence.</p>
+          <ul class="mt-2 space-y-1 text-sm text-paper/75">
+            {ASSESSMENT_ORDER.map((s) => (
+              <li>
+                <AssessmentGlyph status={s} size={12} withLabel />
+              </li>
+            ))}
+          </ul>
+        </li>
+        <li class="border-t border-paper/30 pt-4">
+          <p class="num font-mono text-sm text-marker">03</p>
+          <p class="mt-2 font-semibold">Sources on every page.</p>
+          <p class="mt-1 text-sm text-paper/75">
+            Studies, regulators and the label itself, numbered and linked. No source, no statement.
+          </p>
+        </li>
+        <li class="border-t border-paper/30 pt-4">
+          <p class="num font-mono text-sm text-marker">04</p>
+          <p class="mt-2 font-semibold">Qualified review, dated.</p>
+          <p class="mt-1 text-sm text-paper/75">
+            Pages show who reviewed them and when. Affiliate links are labelled and never affect
+            assessments.
+          </p>
+        </li>
+      </ol>
+      <p class="mt-12">
+        <a
+          href="/methodology"
+          class="btn border-paper text-paper hover:shadow-[3px_3px_0_var(--color-marker)]"
+        >
+          Read our methodology <Icon name="arrow-right" size={14} />
+        </a>
+      </p>
+    </div>
+  </section>
+</BaseLayout>

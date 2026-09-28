@@ -1,0 +1,138 @@
+---
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import VegMark from '@/components/ui/VegMark.astro';
+import { describeFailure, isPriceStale, productCosts, referencePrice } from '@/lib/calculations';
+import type { ProductDetail } from '@/lib/content/types';
+import { ASSESSMENT } from '@/lib/editorial/meta';
+import { keyPerServing } from '@/lib/editorial/product';
+import { BUILD_TIME } from '@/lib/editorial/review';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { formatNumber } from '@/lib/formatting/quantity';
+
+/**
+ * The fast answer, styled as a label panel. In reading order:
+ * what you get per serving → serving/pack → veg → cost → what the label
+ * claims and how each claim held up. Provenance (reviewer, dates) sits
+ * directly beneath, in ReviewLine.
+ */
+interface Props {
+  product: ProductDetail;
+}
+const { product: p } = Astro.props;
+const perServing = keyPerServing(p);
+const snapshot = referencePrice(p);
+const costs = productCosts(p, snapshot);
+const claims = p.claims.filter((c) => c.status !== 'superseded');
+const shownClaims = claims.slice(0, 3);
+const currentPanel = p.panels.find(
+  (x) => x.isCurrent && (x.ingredients.length || x.nutrients.length),
+);
+const stale = snapshot ? isPriceStale(snapshot, BUILD_TIME) : false;
+const firstSentence = (s: string) => s.split(/(?<=\.)\s/)[0] ?? s;
+---
+
+<section aria-labelledby="glance-title" class="border-x border-b border-ink bg-sheet">
+  <header class="flex items-baseline justify-between gap-3 border-b border-ink bg-ink px-3 py-1.5 text-paper sm:px-4">
+    <h2 id="glance-title" class="caption whitespace-nowrap">
+      At a glance
+    </h2>
+    {currentPanel && (
+      <p class="caption text-right text-paper/70">Label of {formatDate(currentPanel.capturedAt)}</p>
+    )}
+  </header>
+
+  <dl>
+    <div class="border-b-[3px] border-ink px-3 py-3 sm:px-4">
+      <dt class="caption text-ink-3">Per serving · as declared on the label</dt>
+      <dd class="num mt-1 font-mono text-xl font-semibold sm:text-2xl">
+        {perServing.length ? (
+          perServing.map((line, i) => (
+            <span class="block">{i === 0 ? <span class="marker">{line}</span> : line}</span>
+          ))
+        ) : (
+          <span class="text-base font-normal text-ink-3">Amounts not disclosed on the label</span>
+        )}
+      </dd>
+    </div>
+
+    <div class="grid grid-cols-2 border-b border-ink sm:grid-cols-3">
+      <div class="border-r border-line px-3 py-3 sm:px-4">
+        <dt class="caption text-ink-3">Serving</dt>
+        <dd class="num mt-1 text-sm">
+          <span class="block font-medium">{p.servingSizeText ?? 'Not printed'}</span>
+          {costs.servings.ok ? (
+            <span class="block text-ink-2">
+              {costs.servings.value.basis === 'label'
+                ? `${formatNumber(costs.servings.value.servings, 0)} servings / pack`
+                : `≈${formatNumber(costs.servings.value.servings, 0)} servings (calculated)`}
+            </span>
+          ) : (
+            <span class="block text-ink-3">Servings per pack not printed</span>
+          )}
+        </dd>
+      </div>
+
+      <div class="px-3 py-3 sm:border-r sm:border-line sm:px-4">
+        <dt class="caption text-ink-3">Veg status</dt>
+        <dd class="mt-1 text-sm">
+          <VegMark status={p.vegStatus} size={14} withLabel class="font-medium" />
+          <a href="#veg" class="mt-0.5 block text-xs text-ink-3 hover:text-ink">
+            {firstSentence(p.vegStatusReason)}
+          </a>
+        </dd>
+      </div>
+
+      <div class="col-span-2 border-t border-line px-3 py-3 sm:col-span-1 sm:border-t-0 sm:px-4">
+        <dt class="caption text-ink-3">Cost per serving</dt>
+        <dd class="mt-1 text-sm">
+          {costs.perServing.ok ? (
+            <>
+              <span class="num block font-mono text-lg font-semibold">
+                {formatMoney(costs.perServing.value, { precise: true })}
+              </span>
+              <a href="#cost" class="num block text-xs text-ink-3 hover:text-ink">
+                {formatMoney({ amount: snapshot!.price, currency: snapshot!.currency })} on{' '}
+                {snapshot!.merchant.name}, {formatDate(snapshot!.capturedAt)}
+                {stale && ' · may have changed'}
+              </a>
+            </>
+          ) : (
+            <span class="block text-ink-3">{describeFailure(costs.perServing.reason)}</span>
+          )}
+        </dd>
+      </div>
+    </div>
+
+    <div class="px-3 py-3 sm:px-4">
+      <dt class="caption text-ink-3">Label claims, checked against evidence</dt>
+      <dd class="mt-1.5 text-sm">
+        {shownClaims.length ? (
+          <ul class="space-y-1.5">
+            {shownClaims.map((c) => (
+              <li class="flex items-start gap-2">
+                <AssessmentGlyph status={c.assessmentStatus} size={13} class="mt-0.5" />
+                <span>
+                  <span class="font-semibold">“{c.exactClaim}”</span>{' '}
+                  <span class="text-ink-3">
+                    {ASSESSMENT[c.assessmentStatus].label.toLowerCase()}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <span class="text-ink-3">No claims assessed yet</span>
+        )}
+        {claims.length > 0 && (
+          <a href="#claims" class="caption mt-2 inline-block text-ink-2 hover:text-ink">
+            {claims.length > shownClaims.length
+              ? `All ${claims.length} claims`
+              : 'See the evidence'}{' '}
+            →
+          </a>
+        )}
+      </dd>
+    </div>
+  </dl>
+</section>

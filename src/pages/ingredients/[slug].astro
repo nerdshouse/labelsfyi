@@ -1,0 +1,290 @@
+---
+import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
+import ReviewLine from '@/components/editorial/ReviewLine.astro';
+import SourceList from '@/components/editorial/SourceList.astro';
+import DoseTable from '@/components/ingredient/DoseTable.astro';
+import ProductRow from '@/components/product/ProductRow.astro';
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import Icon from '@/components/ui/Icon.astro';
+import InPageNav from '@/components/ui/InPageNav.astro';
+import PortableText from '@/components/ui/PortableText.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import type { IngredientDetail } from '@/lib/content/types';
+import { ASSESSMENT } from '@/lib/editorial/meta';
+import { inlineName } from '@/lib/editorial/product';
+import { collectSources } from '@/lib/editorial/sources';
+import { formatAmount } from '@/lib/formatting/quantity';
+import { ingredientPage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.ingredients.map((ingredient) => ({
+    params: { slug: ingredient.slug },
+    props: { ingredient },
+  }));
+}
+
+interface Props {
+  ingredient: IngredientDetail;
+}
+const { ingredient: i } = Astro.props;
+const graph = await getContentGraph();
+
+const sources = collectSources(
+  i.sources,
+  ...i.findings.map((f) => f.sources),
+  i.studiedDoses.map((d) => d.source),
+);
+const sourceNumbers = new Map(sources.map((s, n) => [s._id, n + 1]));
+
+// Amount of *this* ingredient per serving in each product, from the current label.
+const amountIn = (productId: string): string | undefined => {
+  const product = graph.products.find((p) => p._id === productId);
+  const rows = product?.panels
+    .filter((x) => x.isCurrent)
+    .flatMap((x) => x.ingredients.filter((r) => r.ingredient?._id === i._id));
+  if (!rows?.length) return undefined;
+  const disclosed = rows.filter((r) => r.amountPerServing !== null);
+  if (disclosed.length !== rows.length) return `${i.name}: amount not disclosed`;
+  return disclosed
+    .map((r) => `${formatAmount(r.amountPerServing, r.unit)} ${inlineName(i.name)}`)
+    .join(' + ');
+};
+
+const crumbs = [
+  { name: 'Ingredients', href: '/ingredients' },
+  { name: i.name, href: routes.ingredient(i.slug) },
+];
+const nav = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'forms', label: 'Forms' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'doses', label: 'Studied doses' },
+  { id: 'safety', label: 'Safety' },
+  { id: 'buying', label: 'Before you buy' },
+  { id: 'products', label: `Products (${i.products.length})` },
+  { id: 'sources', label: 'Sources' },
+].filter((n) =>
+  n.id === 'forms' ? i.forms.length : n.id === 'doses' ? i.studiedDoses.length : true,
+);
+---
+
+<BaseLayout
+  title={i.seoTitle ?? `${i.name}: what it is, forms, studied doses & evidence`}
+  description={i.seoDescription ?? i.summary}
+  canonicalPath={routes.ingredient(i.slug)}
+  noindex={i.noindex}
+  crumbs={crumbs}
+  jsonLd={ingredientPage(i)}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {i.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This ingredient page" />
+      </div>
+    )}
+    <header class="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12">
+      <div>
+        <p class="caption text-ink-3">Ingredient</p>
+        <h1 class="display mt-2">{i.name}</h1>
+        {i.summary && <p class="lede mt-4 max-w-(--container-prose)">{i.summary}</p>}
+        <div class="mt-6">
+          <ReviewLine meta={i} />
+        </div>
+      </div>
+      <aside class="border-2 border-ink bg-sheet">
+        <p class="caption border-b border-ink bg-ink px-3 py-1.5 text-paper">On labels as</p>
+        <ul class="divide-y divide-line px-3">
+          {i.commonLabelNames.map((name) => (
+            <li class="py-2 font-mono text-sm">{name}</li>
+          ))}
+        </ul>
+        <dl class="grid grid-cols-2 border-t-[3px] border-ink">
+          <div class="border-r border-line px-3 py-2">
+            <dt class="caption text-ink-3">Products</dt>
+            <dd class="num font-mono text-xl font-semibold">{i.products.length}</dd>
+          </div>
+          <div class="px-3 py-2">
+            <dt class="caption text-ink-3">Findings</dt>
+            <dd class="num font-mono text-xl font-semibold">{i.findings.length}</dd>
+          </div>
+        </dl>
+      </aside>
+    </header>
+  </div>
+
+  <InPageNav items={nav} />
+
+  <div class="page mt-12 space-y-20">
+    <section>
+      <SectionHead id="overview" kicker="01 · Overview" title={`What is ${inlineName(i.name)}?`} />
+      <div class="grid gap-10 lg:grid-cols-2">
+        <PortableText value={i.overview} />
+        {i.whyInSupplements && (
+          <div>
+            <h3 class="caption mb-2 text-ink-3">Why it’s in supplements</h3>
+            <PortableText value={i.whyInSupplements} />
+          </div>
+        )}
+      </div>
+    </section>
+
+    {i.forms.length > 0 && (
+      <section>
+        <SectionHead id="forms" kicker="02 · Forms" title="Forms you’ll see on labels" />
+        <dl class="grid gap-x-10 md:grid-cols-2">
+          {i.forms.map((f) => (
+            <div class="border-t border-ink py-4">
+              <dt class="font-semibold">{f.name}</dt>
+              {f.description && <dd class="mt-1 text-sm text-ink-2">{f.description}</dd>}
+            </div>
+          ))}
+        </dl>
+      </section>
+    )}
+
+    <section>
+      <SectionHead id="evidence" kicker="03 · Evidence" title="What the evidence says" />
+      {i.findings.length ? (
+        <ul class="border-b border-ink">
+          {i.findings.map((f) => (
+            <li class="grid gap-x-8 gap-y-2 border-t border-ink py-5 md:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
+              <div>
+                <p class="font-semibold">{f.outcome}</p>
+                <p class="mt-1 text-sm">
+                  <AssessmentGlyph status={f.status} withLabel />
+                </p>
+              </div>
+              <p class="text-ink-2">
+                {f.summary}
+                {f.sources.map((s) => (
+                  <a
+                    href={`#source-${sourceNumbers.get(s._id)}`}
+                    class="link ml-1 font-mono text-xs"
+                  >
+                    [{sourceNumbers.get(s._id)}]
+                  </a>
+                ))}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState title="No evidence summary yet">
+          We haven’t published an evidence summary for this ingredient. Until we do, we make no
+          statement about its effects.
+        </EmptyState>
+      )}
+      <p class="mt-3 text-xs text-ink-3">
+        Assessment labels:{' '}
+        {Object.values(ASSESSMENT)
+          .map((a) => a.label)
+          .join(', ')}
+        .{' '}
+        <a href="/methodology#assessments" class="link">
+          What they mean
+        </a>
+      </p>
+    </section>
+
+    {i.studiedDoses.length > 0 && (
+      <section>
+        <SectionHead id="doses" kicker="04 · Doses" title="Typical studied doses" />
+        <DoseTable doses={i.studiedDoses} sourceNumbers={sourceNumbers} />
+      </section>
+    )}
+
+    <section>
+      <SectionHead id="safety" kicker="05 · Safety" title="Safety & context" />
+      {i.safety ? (
+        <div class="border-l-[3px] border-ink pl-4 sm:pl-6">
+          <PortableText value={i.safety} />
+          <p class="mt-4 max-w-(--container-prose) text-sm text-ink-3">
+            This is general information, not medical advice. Speak to a doctor before starting a
+            supplement, especially if you are pregnant, breastfeeding, have a medical condition or
+            take medication.
+          </p>
+        </div>
+      ) : (
+        <EmptyState title="Safety notes not yet written">
+          We haven’t published safety context for this ingredient yet.
+        </EmptyState>
+      )}
+    </section>
+
+    {i.buyingNotes && (
+      <section>
+        <SectionHead id="buying" kicker="06 · Before you buy" title="What to check on the label" />
+        <PortableText value={i.buyingNotes} />
+      </section>
+    )}
+
+    <section>
+      <SectionHead
+        id="products"
+        kicker="07 · Products"
+        title={`Products containing ${inlineName(i.name)}`}
+      />
+      {i.products.length ? (
+        <div class="border-t border-ink">
+          {i.products.map((p) => (
+            <ProductRow product={p} detail={amountIn(p._id)} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No products yet">
+          We haven’t published a product that lists this ingredient on its label yet.
+        </EmptyState>
+      )}
+      {(i.comparisons.length > 0 || i.guides.length > 0) && (
+        <ul class="mt-8 grid gap-x-8 sm:grid-cols-2">
+          {i.comparisons.map((c) => (
+            <li class="border-b border-line">
+              <a
+                href={routes.comparison(c.slug)}
+                class="flex items-center justify-between gap-3 py-3 hover:underline"
+              >
+                <span>
+                  <span class="caption block text-ink-3">Comparison</span>
+                  <span class="font-medium">{c.title}</span>
+                </span>
+                <Icon name="arrow-right" size={14} />
+              </a>
+            </li>
+          ))}
+          {i.guides.map((g) => (
+            <li class="border-b border-line">
+              <a
+                href={routes.guide(g.slug)}
+                class="flex items-center justify-between gap-3 py-3 hover:underline"
+              >
+                <span>
+                  <span class="caption block text-ink-3">Guide</span>
+                  <span class="font-medium">{g.title}</span>
+                </span>
+                <Icon name="arrow-right" size={14} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <section>
+      <SectionHead id="sources" kicker="08 · Sources" title="Sources" />
+      <SourceList sources={sources} />
+    </section>
+
+    <section>
+      <SectionHead id="review" kicker="09 · Review" title="Review" />
+      <ReviewerBlock meta={i} />
+    </section>
+  </div>
+</BaseLayout>

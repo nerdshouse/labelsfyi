@@ -1,0 +1,60 @@
+---
+import AffiliateDisclosure from '@/components/affiliate/AffiliateDisclosure.astro';
+import AffiliateLink from '@/components/affiliate/AffiliateLink.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import { needsDisclosure, usableOffers } from '@/lib/affiliates';
+import { latestPricesByMerchant } from '@/lib/calculations';
+import type { ProductDetail } from '@/lib/content/types';
+import { BUILD_TIME } from '@/lib/editorial/review';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+
+interface Props {
+  product: ProductDetail;
+}
+const { product: p } = Astro.props;
+const offers = usableOffers(p.offers, BUILD_TIME);
+const hidden = p.offers.length - offers.length;
+const priceByMerchant = new Map(latestPricesByMerchant(p.prices).map((s) => [s.merchant._id, s]));
+---
+
+{offers.length ? (
+  <div class="space-y-4">
+    {needsDisclosure(offers) && <AffiliateDisclosure />}
+    <ul class="border-t border-ink">
+      {offers.map((o) => {
+        const s = priceByMerchant.get(o.merchant._id);
+        return (
+          <li class="flex flex-col gap-3 border-b border-line py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="font-semibold">{o.merchant.name}</p>
+              <p class="num text-sm text-ink-3">
+                {s
+                  ? `${formatMoney({ amount: s.price, currency: s.currency })} observed ${formatDate(s.capturedAt)}${s.availability === 'out_of_stock' ? ' (out of stock)' : ''}`
+                  : 'No price observed at this retailer'}
+              </p>
+            </div>
+            <div>
+              <AffiliateLink
+                offer={o}
+                productId={p._id}
+                productName={`${p.brand.name} ${p.name}`}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+    <p class="text-xs text-ink-3">
+      Retailer links never influence our label analysis or claim assessments.
+      {hidden > 0 &&
+        ` ${hidden} retailer ${hidden === 1 ? 'link is' : 'links are'} hidden because we couldn’t recently verify ${hidden === 1 ? 'it' : 'them'}.`}
+    </p>
+  </div>
+) : (
+  <EmptyState title="No verified retailer links right now">
+    We only link to listings we have checked in the last 45 days.
+    {hidden > 0 && ' Previously listed links are hidden until they are re-checked.'} Search for the
+    product name on your preferred retailer.
+  </EmptyState>
+)}

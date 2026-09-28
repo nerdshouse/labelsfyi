@@ -1,0 +1,64 @@
+---
+import PackVisual from '@/components/product/PackVisual.astro';
+import VegMark from '@/components/ui/VegMark.astro';
+import { productCosts, referencePrice } from '@/lib/calculations';
+import type { ProductSummary } from '@/lib/content/types';
+import { keyPerServing } from '@/lib/editorial/product';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { routes } from '@/lib/seo/site';
+
+/**
+ * One product in a list: an index-style row, not a card.
+ * Left: identity. Right: the two numbers people compare (per serving, ₹/serving).
+ */
+interface Props {
+  product: ProductSummary;
+  /** Override the "per serving" line, e.g. an ingredient page showing that ingredient's amount. */
+  detail?: string | undefined;
+  headingLevel?: 'h2' | 'h3';
+}
+const { product, detail, headingLevel = 'h3' } = Astro.props;
+const Heading = headingLevel;
+const lines = detail ? [detail] : keyPerServing(product);
+const snapshot = referencePrice(product);
+const cost = productCosts(product, snapshot).perServing;
+---
+
+<article class="group relative grid grid-cols-[auto_1fr] gap-x-4 border-b border-line py-4 sm:grid-cols-[auto_1fr_auto]">
+  <PackVisual product={product} image={product.image} size="sm" />
+  <div class="min-w-0">
+    <p class="caption flex items-center gap-2 text-ink-3">
+      <VegMark status={product.vegStatus} size={11} />
+      <span class="truncate">{product.brand.name}</span>
+    </p>
+    <Heading class="mt-1 leading-snug font-semibold">
+      <a
+        href={routes.product(product.slug)}
+        class="after:absolute after:inset-0 group-hover:underline"
+      >
+        {product.name}
+      </a>
+    </Heading>
+    {lines.length > 0 && (
+      <p class="num mt-1 text-sm text-ink-2">
+        {lines.join(' · ')} <span class="text-ink-3">per serving</span>
+      </p>
+    )}
+  </div>
+  <div class="col-start-2 mt-2 flex items-baseline gap-2 sm:col-start-3 sm:mt-0 sm:block sm:text-right">
+    {cost.ok ? (
+      <>
+        <p class="num font-mono text-base font-semibold">
+          {formatMoney(cost.value, { precise: true })}
+          <span class="text-xs font-normal text-ink-3">/serving</span>
+        </p>
+        <p class="text-xs text-ink-3">
+          {snapshot!.merchant.name}, {formatDate(snapshot!.capturedAt)}
+        </p>
+      </>
+    ) : (
+      <p class="text-xs text-ink-3">No price observed</p>
+    )}
+  </div>
+</article>

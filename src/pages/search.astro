@@ -1,0 +1,202 @@
+---
+import SearchBox from '@/components/search/SearchBox.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+const browse = [
+  { href: '/products', label: 'All products' },
+  { href: '/ingredients', label: 'Ingredients A–Z' },
+  { href: '/compare', label: 'Comparisons' },
+  { href: '/guides', label: 'Guides' },
+];
+---
+
+<BaseLayout
+  title="Search"
+  description="Search supplement products, ingredients, brands, comparisons and guides."
+  canonicalPath="/search"
+  noindex
+  hideHeaderSearch
+>
+  <div class="page pt-8 sm:pt-12">
+    <h1 class="caption text-ink-3">Search labels.fyi</h1>
+    <div class="mt-3 max-w-3xl">
+      <SearchBox variant="page" id="page-search" autofocus />
+    </div>
+
+    <div class="mt-8 max-w-3xl" aria-live="polite" data-search-results>
+      <div data-state="idle">
+        <p class="caption text-ink-3">Browse</p>
+        <ul class="mt-2 border-t border-ink">
+          {browse.map((b) => (
+            <li class="border-b border-line">
+              <a href={b.href} class="block py-3 font-medium hover:underline">
+                {b.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p data-state="loading" hidden class="py-6 text-ink-3">
+        Searching…
+      </p>
+      <div data-state="empty" hidden>
+        <p class="text-lg">
+          No matches for <strong data-query class="font-semibold"></strong>.
+        </p>
+        <ul class="mt-3 list-[square] space-y-1 pl-5 text-ink-2">
+          <li>Check the spelling, or try a shorter query like an ingredient name (“creatine”).</li>
+          <li>Search by what’s on the label: “whey”, “D3”, “magnesium glycinate”.</li>
+          <li>
+            Browse{' '}
+            <a href="/products" class="link">
+              all products
+            </a>{' '}
+            or{' '}
+            <a href="/ingredients" class="link">
+              ingredients
+            </a>
+            .
+          </li>
+        </ul>
+        <p class="notice-quiet mt-6">
+          Can’t find a product? We add products as we capture and check their labels. Tell us what
+          to decode next:{' '}
+          <a href="mailto:hello@labels.fyi?subject=Product%20request" class="link">
+            hello@labels.fyi
+          </a>
+        </p>
+      </div>
+      <p data-state="error" hidden class="notice">
+        Search couldn’t load. Check your connection and try again, or browse{' '}
+        <a href="/products" class="link">
+          products
+        </a>
+        .
+      </p>
+      <div data-state="results" hidden></div>
+    </div>
+    <noscript>
+      <p class="notice mt-6 max-w-3xl">
+        Search needs JavaScript. You can browse{' '}
+        <a href="/products" class="link">
+          products
+        </a>
+        ,{' '}
+        <a href="/ingredients" class="link">
+          ingredients
+        </a>{' '}
+        and{' '}
+        <a href="/guides" class="link">
+          guides
+        </a>{' '}
+        instead.
+      </p>
+    </noscript>
+  </div>
+</BaseLayout>
+
+<script>
+  import { loadEngine, TYPE_LABEL } from '@/components/search/search-client';
+  import { track } from '@/lib/analytics/events';
+  import type { SearchDocument } from '@/lib/content/types';
+
+  const root = document.querySelector<HTMLElement>('[data-search-results]')!;
+  const input = document.querySelector<HTMLInputElement>('#page-search')!;
+  const states = root.querySelectorAll<HTMLElement>('[data-state]');
+  const show = (name: string) => states.forEach((el) => (el.hidden = el.dataset.state !== name));
+  const ORDER: SearchDocument['type'][] = ['product', 'ingredient', 'comparison', 'brand', 'guide'];
+  const GROUP: Record<SearchDocument['type'], string> = {
+    product: 'Products',
+    ingredient: 'Ingredients',
+    comparison: 'Comparisons',
+    brand: 'Brands',
+    guide: 'Guides',
+  };
+  const VEG_LABEL: Record<string, string> = {
+    VEGETARIAN: 'Veg',
+    VEGAN: 'Vegan',
+    NON_VEGETARIAN: 'Non-veg',
+    UNKNOWN: 'Veg status unknown',
+  };
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string) {
+    const node = document.createElement(tag);
+    node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  async function run(q: string) {
+    const query = q.trim();
+    const url = new URL(location.href);
+    if (query) url.searchParams.set('q', query);
+    else url.searchParams.delete('q');
+    history.replaceState(null, '', url);
+    if (!query) return show('idle');
+    show('loading');
+    try {
+      const engine = await loadEngine();
+      const hits = engine.search(query, { limit: 60 });
+      track('search', { search_term: query, results: hits.length });
+      if (!hits.length) {
+        root.querySelector('[data-query]')!.textContent = `“${query}”`;
+        return show('empty');
+      }
+      const container = root.querySelector<HTMLElement>('[data-state="results"]')!;
+      container.replaceChildren();
+      container.append(
+        el('p', 'caption text-ink-3', `${hits.length} result${hits.length === 1 ? '' : 's'}`),
+      );
+      for (const type of ORDER) {
+        const group = hits.filter((h) => h.doc.type === type);
+        if (!group.length) continue;
+        const section = el('section', 'mt-6');
+        section.append(
+          el(
+            'h2',
+            'caption border-t-[6px] border-ink pt-2 text-ink-3',
+            `${GROUP[type]} · ${group.length}`,
+          ),
+        );
+        const list = el('ul', '');
+        for (const { doc } of group) {
+          const li = el('li', 'border-b border-line');
+          const a = el('a', 'group grid grid-cols-[1fr_auto] items-baseline gap-x-3 py-3');
+          a.href = doc.url;
+          const left = el('span', 'min-w-0');
+          left.append(el('span', 'block font-semibold group-hover:underline', doc.title));
+          left.append(el('span', 'block text-sm text-ink-3', doc.subtitle));
+          a.append(left);
+          a.append(
+            el(
+              'span',
+              'caption text-ink-3',
+              doc.vegStatus ? (VEG_LABEL[doc.vegStatus] ?? '') : TYPE_LABEL[doc.type],
+            ),
+          );
+          li.append(a);
+          list.append(li);
+        }
+        section.append(list);
+        container.append(section);
+      }
+      show('results');
+    } catch {
+      show('error');
+    }
+  }
+
+  const initial = new URL(location.href).searchParams.get('q') ?? '';
+  input.value = initial;
+  void run(initial);
+
+  let timer: number | undefined;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(() => void run(input.value), 150);
+  });
+  input.form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    void run(input.value);
+  });
+</script>

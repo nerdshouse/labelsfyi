@@ -1,0 +1,122 @@
+---
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import VegMark from '@/components/ui/VegMark.astro';
+import { productCosts, referencePrice } from '@/lib/calculations';
+import type { AssessmentStatus, ProductDetail } from '@/lib/content/types';
+import { ASSESSMENT, VEG } from '@/lib/editorial/meta';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { formatAmount } from '@/lib/formatting/quantity';
+import { routes } from '@/lib/seo/site';
+
+/**
+ * Homepage hero visual: a real label panel from the dataset, annotated the
+ * way labels.fyi reads it. Built from data, so it is never an illustration
+ * of something we haven't checked.
+ */
+interface Props {
+  product: ProductDetail;
+}
+const { product: p } = Astro.props;
+const panel = p.panels.find((x) => x.isCurrent && (x.ingredients.length || x.nutrients.length));
+// Headline row: a declared key nutrient (e.g. protein), else a key active with a disclosed amount.
+const nutrient = panel?.nutrients.find((n) => n.nutrientKey === 'protein' && n.perServing !== null);
+const active = panel?.ingredients.find((r) => r.isKeyActive && r.amountPerServing !== null);
+const key = nutrient
+  ? { name: nutrient.name, amount: formatAmount(nutrient.perServing, nutrient.unit) }
+  : active
+    ? { name: active.displayName, amount: formatAmount(active.amountPerServing, active.unit) }
+    : null;
+const claim = p.claims[0];
+const snap = referencePrice(p);
+const cost = productCosts(p, snap).perServing;
+const notes = [
+  claim && {
+    n: 1,
+    title: `“${claim.exactClaim}”`,
+    body: claim.assessment,
+    glyph: claim.assessmentStatus,
+    meta: ASSESSMENT[claim.assessmentStatus].label,
+  },
+  {
+    n: 2,
+    title: VEG[p.vegStatus].label,
+    body: p.vegStatusReason.split(/(?<=\.)\s/)[0],
+    meta: `Observed ${formatDate(p.lastVerifiedAt)}`,
+  },
+  cost.ok && {
+    n: 3,
+    title: `${formatMoney(cost.value, { precise: true })} per serving`,
+    body: `${formatMoney({ amount: snap!.price, currency: snap!.currency })} on ${snap!.merchant.name}, divided by servings in the pack.`,
+    meta: `Price observed ${formatDate(snap!.capturedAt)}`,
+  },
+].filter(Boolean) as Array<{
+  n: number;
+  title: string;
+  body: string;
+  glyph?: AssessmentStatus;
+  meta: string;
+}>;
+---
+
+{panel && key && (
+  <figure class="grid gap-5 sm:grid-cols-[minmax(0,15rem)_1fr] lg:grid-cols-1 xl:grid-cols-[minmax(0,15rem)_1fr]">
+    <div class="relative border-2 border-ink bg-sheet p-3 pb-7 shadow-[6px_6px_0_var(--color-ink)]">
+      <div class="flex items-start justify-between border-b-[6px] border-ink pb-1">
+        <p class="text-lg leading-none font-extrabold tracking-tight">{panel.title}</p>
+        <span class="relative">
+          <VegMark status={p.vegStatus} size={16} />
+          <span class="absolute -top-2 -right-3 flex size-4 items-center justify-center rounded-full bg-marker font-mono text-[0.6rem] font-bold">
+            2
+          </span>
+        </span>
+      </div>
+      <p class="num mt-1 border-b border-ink pb-1 text-xs">
+        Serving size <strong>{panel.servingSizeText}</strong>
+        <br />
+        Servings per pack <strong>{panel.servingsPerContainer ?? '—'}</strong>
+      </p>
+      <div class="num flex items-baseline justify-between border-b-[3px] border-ink py-1.5 text-sm">
+        <span class="font-semibold">{key.name}</span>
+        <span class="marker font-mono font-bold">{key.amount}</span>
+      </div>
+      {panel.ingredientsText && (
+        <p class="mt-1.5 font-mono text-[0.65rem] leading-snug text-ink-2">
+          <span class="font-bold">INGREDIENTS:</span> {panel.ingredientsText}
+        </p>
+      )}
+      {claim && (
+        <p class="absolute -bottom-4 left-3 -rotate-2 border-2 border-ink bg-marker px-2 py-0.5 text-xs font-extrabold tracking-tight">
+          {claim.exactClaim}
+          <span class="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full bg-ink font-mono text-[0.6rem] font-bold text-paper">
+            1
+          </span>
+        </p>
+      )}
+    </div>
+    <figcaption class="mt-4 sm:mt-0 lg:mt-4 xl:mt-0">
+      <p class="caption text-ink-3">
+        How we read it ·{' '}
+        <a href={routes.product(p.slug)} class="link text-ink">
+          {p.brand.name} {p.name}
+        </a>
+        {p.isDemo && <span class="tag tag-marker ml-1">Demo</span>}
+      </p>
+      <ol class="mt-3 space-y-3">
+        {notes.map((note) => (
+          <li class="grid grid-cols-[1.25rem_1fr] gap-x-2 text-sm">
+            <span class="num font-mono text-xs font-bold text-ink-3">{note.n}</span>
+            <div>
+              <p class="flex items-center gap-1.5 font-semibold">
+                {note.glyph && <AssessmentGlyph status={note.glyph} size={12} />}
+                {note.title}
+              </p>
+              <p class="text-ink-2">{note.body}</p>
+              <p class="caption mt-0.5 text-ink-3">{note.meta}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </figcaption>
+  </figure>
+)}

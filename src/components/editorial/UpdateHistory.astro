@@ -1,0 +1,63 @@
+---
+import type { HistoryEvent } from '@/lib/editorial/product';
+import { formatDate } from '@/lib/formatting/dates';
+
+/** Auditable, dated history. The first few events are shown; the rest fold away. */
+interface Props {
+  events: HistoryEvent[];
+  visible?: number;
+}
+const { events, visible = 6 } = Astro.props;
+const KIND: Record<HistoryEvent['kind'], string> = {
+  published: 'Published',
+  label: 'Label',
+  observation: 'Observed',
+  review: 'Review',
+  price: 'Price',
+  superseded: 'Superseded',
+};
+const head = events.slice(0, visible);
+const rest = events.slice(visible);
+---
+
+<ol class="border-l border-ink">
+  {head.map((e) => (
+    <li class="relative grid gap-x-4 pb-4 pl-5 sm:grid-cols-[7.5rem_5.5rem_1fr]">
+      <span class="absolute top-1.5 -left-[4.5px] size-2 bg-ink" aria-hidden="true" />
+      <time datetime={e.date} class="num font-mono text-xs text-ink-3 sm:pt-0.5">
+        {formatDate(e.date)}
+      </time>
+      <span class="caption text-ink-3 sm:pt-0.5">{KIND[e.kind]}</span>
+      <p class="text-sm">
+        <span
+          class:list={[e.kind === 'superseded' && 'text-ink-3 line-through decoration-ink-3/50']}
+        >
+          {e.text}
+        </span>
+        {e.detail && <span class="block text-xs text-ink-3">{e.detail}</span>}
+      </p>
+    </li>
+  ))}
+</ol>
+{rest.length > 0 && (
+  <details class="mt-1">
+    <summary class="caption cursor-pointer pl-5 text-ink-2 hover:text-ink">
+      Show {rest.length} earlier {rest.length === 1 ? 'event' : 'events'}
+    </summary>
+    <ol class="mt-3 border-l border-ink">
+      {rest.map((e) => (
+        <li class="relative grid gap-x-4 pb-4 pl-5 sm:grid-cols-[7.5rem_5.5rem_1fr]">
+          <span class="absolute top-1.5 -left-[4.5px] size-2 bg-ink" aria-hidden="true" />
+          <time datetime={e.date} class="num font-mono text-xs text-ink-3">
+            {formatDate(e.date)}
+          </time>
+          <span class="caption text-ink-3">{KIND[e.kind]}</span>
+          <p class="text-sm">
+            {e.text}
+            {e.detail && <span class="block text-xs text-ink-3">{e.detail}</span>}
+          </p>
+        </li>
+      ))}
+    </ol>
+  </details>
+)}

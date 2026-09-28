@@ -1,0 +1,82 @@
+---
+import SearchBox from '@/components/search/SearchBox.astro';
+import Icon from '@/components/ui/Icon.astro';
+import Wordmark from '@/components/ui/Wordmark.astro';
+
+interface Props {
+  /** The homepage hero owns search; hide the header field there. */
+  hideSearch?: boolean;
+}
+const { hideSearch = false } = Astro.props;
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/products', label: 'Products' },
+  { href: '/ingredients', label: 'Ingredients' },
+  { href: '/compare', label: 'Compare' },
+  { href: '/guides', label: 'Guides' },
+];
+const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
+---
+
+<header class="sticky top-0 z-30 border-b border-ink bg-paper/95 backdrop-blur-sm">
+  <a
+    href="#main"
+    class="sr-only-focusable absolute top-2 left-2 z-50 bg-ink px-3 py-2 text-sm text-paper"
+  >
+    Skip to content
+  </a>
+  <div class="page flex h-14 items-center gap-4 md:h-16">
+    <a href="/" aria-label="labels.fyi home" class="shrink-0">
+      <Wordmark />
+    </a>
+
+    <nav aria-label="Primary" class="hidden md:ml-4 md:block">
+      <ul class="flex items-center gap-1">
+        {nav.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              aria-current={isActive(item.href) ? 'page' : undefined}
+              class="rounded-xs px-2.5 py-1.5 text-sm font-medium text-ink-2 hover:bg-paper-2 hover:text-ink aria-[current=page]:bg-ink aria-[current=page]:text-paper"
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="ml-auto flex min-w-0 flex-1 justify-end">
+      {!hideSearch && (
+        <>
+          <div class="hidden w-full justify-end md:flex">
+            <SearchBox variant="compact" id="header-search" />
+          </div>
+          <a
+            href="/search"
+            class="flex h-10 min-w-0 flex-1 items-center gap-2 border border-ink bg-sheet px-3 text-sm text-ink-3 md:hidden"
+          >
+            <Icon name="search" size={15} />
+            <span class="truncate">Search products, ingredients…</span>
+          </a>
+        </>
+      )}
+    </div>
+  </div>
+
+  <nav aria-label="Primary (mobile)" class="border-t border-line md:hidden">
+    <ul class="page scroll-strip h-10 items-center gap-5">
+      {nav.map((item) => (
+        <li>
+          <a
+            href={item.href}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+            class="caption flex h-10 items-center border-b-2 border-transparent text-ink-2 aria-[current=page]:border-ink aria-[current=page]:text-ink"
+          >
+            {item.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</header>

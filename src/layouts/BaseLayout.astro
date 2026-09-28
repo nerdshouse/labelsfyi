@@ -1,0 +1,90 @@
+---
+import '@/styles/global.css';
+// Preload the two faces used above the fold (body + headings, Latin subset) to avoid a late swap.
+import sansLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
+import serifLatin from '@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2?url';
+import SiteFooter from '@/components/layout/SiteFooter.astro';
+import SiteHeader from '@/components/layout/SiteHeader.astro';
+import JsonLd from '@/components/seo/JsonLd.astro';
+import Seo, { type SeoProps } from '@/components/seo/Seo.astro';
+import { contentSource } from '@/lib/content/client';
+import { breadcrumbList, organization, type Crumb } from '@/lib/seo/jsonld';
+import { PUBLIC_CF_ANALYTICS_TOKEN, PUBLIC_GA_MEASUREMENT_ID } from 'astro:env/client';
+
+interface Props extends SeoProps {
+  crumbs?: Crumb[];
+  jsonLd?: Array<Record<string, unknown>>;
+  hideHeaderSearch?: boolean;
+}
+
+const { crumbs, jsonLd = [], hideHeaderSearch = false, noindex = false, ...seo } = Astro.props;
+
+// A build from the fictional demo dataset must never be indexed.
+const robotsNoindex = noindex || contentSource === 'demo';
+const graph = [
+  organization(),
+  ...(crumbs?.length ? [breadcrumbList([{ name: 'Home', href: '/' }, ...crumbs])] : []),
+  ...jsonLd,
+];
+---
+
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f2ea" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={sansLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={serifLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="sitemap" href="/sitemap.xml" />
+    <Seo {...seo} noindex={robotsNoindex} />
+    <JsonLd nodes={graph} />
+    {PUBLIC_GA_MEASUREMENT_ID && (
+      <>
+        <script
+          is:inline
+          async
+          src={`https://www.googletagmanager.com/gtag/js?id=${PUBLIC_GA_MEASUREMENT_ID}`}
+        />
+        <script is:inline define:vars={{ id: PUBLIC_GA_MEASUREMENT_ID }}>
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = function () {
+            // gtag requires the Arguments object itself, not an array.
+            // eslint-disable-next-line prefer-rest-params
+            window.dataLayer.push(arguments);
+          };
+          window.gtag('js', new Date());
+          window.gtag('config', id, { anonymize_ip: true });
+        </script>
+      </>
+    )}
+    {PUBLIC_CF_ANALYTICS_TOKEN && (
+      <script
+        is:inline
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon={JSON.stringify({ token: PUBLIC_CF_ANALYTICS_TOKEN })}
+      />
+    )}
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    {contentSource === 'demo' && (
+      <div class="bg-ink text-paper">
+        <p class="page caption py-1.5 text-center text-paper/85">
+          Demo build · all brands, products and reviewers shown are fictional
+        </p>
+      </div>
+    )}
+    <SiteHeader hideSearch={hideHeaderSearch} />
+    <main id="main" class="flex-1">
+      <slot />
+    </main>
+    <SiteFooter />
+    <script>
+      import { bindDeclarativeTracking } from '@/lib/analytics/events';
+      bindDeclarativeTracking();
+    </script>
+  </body>
+</html>

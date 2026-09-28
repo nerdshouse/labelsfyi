@@ -1,0 +1,222 @@
+---
+import Icon from '@/components/ui/Icon.astro';
+import type { LabelIngredientRow, LabelPanelData } from '@/lib/content/types';
+import { PANEL_TYPE } from '@/lib/editorial/meta';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatAmount, formatNumber, formatQuantity } from '@/lib/formatting/quantity';
+import { routes } from '@/lib/seo/site';
+
+/**
+ * A captured label panel, rendered in the typographic language of a
+ * printed nutrition / supplement facts panel. Missing amounts are shown as
+ * "not disclosed", never estimated.
+ */
+interface Props {
+  panel: LabelPanelData;
+  sourceNumber?: number | undefined;
+}
+const { panel, sourceNumber } = Astro.props;
+const isFacts = panel.panelType === 'nutrition' || panel.panelType === 'supplement_facts';
+const hasPer100 = panel.per100Basis !== null && panel.nutrients.some((n) => n.per100 !== null);
+const hasDv = panel.nutrients.some((n) => n.dailyValuePercent !== null);
+
+// Group ingredient rows: consecutive rows sharing a blendName form one block.
+type Group = { blend: string | null; rows: LabelIngredientRow[] };
+const groups: Group[] = [];
+for (const row of [...panel.ingredients].sort(
+  (a, b) => (a.orderOnLabel ?? 0) - (b.orderOnLabel ?? 0),
+)) {
+  const last = groups.at(-1);
+  if (row.blendName && last?.blend === row.blendName) last.rows.push(row);
+  else groups.push({ blend: row.blendName, rows: [row] });
+}
+const hasAmounts = panel.ingredients.some((r) => r.amountPerServing !== null);
+---
+
+<article class="border-2 border-ink bg-sheet">
+  <header class="border-b-[6px] border-ink px-3 pt-2 pb-1.5 sm:px-4">
+    <h3 class="text-xl leading-tight font-extrabold tracking-tight">
+      {panel.title ?? PANEL_TYPE[panel.panelType]}
+    </h3>
+    {isFacts && (panel.servingSizeText || panel.servingsPerContainer) && (
+      <dl class="num mt-1 flex flex-wrap gap-x-4 text-sm">
+        <div class="flex gap-1">
+          <dt>Serving size</dt>
+          <dd class="font-semibold">
+            {panel.servingSizeText ?? formatQuantity(panel.servingSize)}
+          </dd>
+        </div>
+        <div class="flex gap-1">
+          <dt>Servings per pack</dt>
+          <dd class="font-semibold">
+            {panel.servingsPerContainer ?? <span class="font-normal text-ink-3">not printed</span>}
+          </dd>
+        </div>
+      </dl>
+    )}
+  </header>
+
+  <div class="px-3 pb-3 sm:px-4">
+    {isFacts && panel.nutrients.length > 0 && (
+      <table class="facts mt-1">
+        <caption class="sr-only">Nutrition values for {panel.title ?? 'this panel'}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Nutrient</th>
+            <th scope="col" class="n">
+              Per serving
+            </th>
+            {hasPer100 && (
+              <th scope="col" class="n">
+                Per 100 {panel.per100Basis}
+              </th>
+            )}
+            {hasDv && (
+              <th scope="col" class="n">
+                %DV
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {panel.nutrients.map((n) => (
+            <tr class:list={[n.indent > 0 && 'indent']}>
+              <th scope="row" class="text-left font-medium">
+                {n.name}
+              </th>
+              <td class="n font-semibold">{formatAmount(n.perServing, n.unit)}</td>
+              {hasPer100 && <td class="n text-ink-2">{formatAmount(n.per100, n.unit)}</td>}
+              {hasDv && (
+                <td class="n">
+                  {n.dailyValuePercent !== null ? `${formatNumber(n.dailyValuePercent)}%` : '—'}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+
+    {groups.length > 0 && (
+      <div class:list={[isFacts && panel.nutrients.length > 0 && 'mt-5']}>
+        <table class="facts">
+          <caption class="sr-only">Ingredients in label order</caption>
+          <thead>
+            <tr>
+              <th scope="col">Ingredients, in label order</th>
+              {hasAmounts && (
+                <th scope="col" class="n">
+                  Per serving
+                </th>
+              )}
+            </tr>
+          </thead>
+          {groups.map((g) => (
+            <tbody class:list={[g.blend && 'border-l-[3px] border-ink']}>
+              {g.blend && (
+                <tr>
+                  <th
+                    scope="rowgroup"
+                    colspan={hasAmounts ? 2 : 1}
+                    class="bg-paper-2/70 pl-2 text-left"
+                  >
+                    <span class="font-semibold">{g.blend}</span>
+                    <span class="block text-xs font-normal text-ink-3">
+                      Proprietary blend: individual amounts not disclosed
+                    </span>
+                  </th>
+                </tr>
+              )}
+              {g.rows.map((row) => (
+                <tr>
+                  <th
+                    scope="row"
+                    class:list={[
+                      'text-left',
+                      row.isKeyActive ? 'font-semibold' : 'font-normal',
+                      g.blend && 'pl-4',
+                    ]}
+                  >
+                    <span class="caption mr-2 inline-block w-4 text-ink-3">
+                      {row.orderOnLabel ?? ''}
+                    </span>
+                    {row.ingredient ? (
+                      <a href={routes.ingredient(row.ingredient.slug)} class="link">
+                        {row.displayName}
+                      </a>
+                    ) : (
+                      row.displayName
+                    )}
+                    {row.observation && (
+                      <span class="mt-0.5 block pl-6 text-xs font-normal text-ink-3">
+                        {row.observation}
+                      </span>
+                    )}
+                    {row.editorialNote && (
+                      <span class="mt-1 ml-6 block border-l-[3px] border-marker pl-2 text-xs font-normal text-ink-2">
+                        <span class="caption mr-1 text-ink">labels.fyi note</span>
+                        {row.editorialNote}
+                      </span>
+                    )}
+                  </th>
+                  {hasAmounts && (
+                    <td class="n">
+                      {row.amountPerServing !== null ? (
+                        <span class:list={[row.isKeyActive && 'font-semibold']}>
+                          {formatAmount(row.amountPerServing, row.unit)}
+                          {row.dailyValuePercent !== null && (
+                            <span class="ml-1 text-xs text-ink-3">
+                              {formatNumber(row.dailyValuePercent)}%
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span class="text-xs text-ink-3">not disclosed</span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    )}
+
+    {panel.ingredientsText && (
+      <figure class="mt-4">
+        <figcaption class="caption text-ink-3">Ingredient list, as printed</figcaption>
+        <blockquote class="mt-1 border-l-[3px] border-line pl-3 font-mono text-xs leading-relaxed text-ink-2">
+          {panel.ingredientsText}
+        </blockquote>
+      </figure>
+    )}
+
+    {panel.text && <p class="mt-3 text-sm leading-relaxed text-ink-2">{panel.text}</p>}
+
+    {panel.notes && <p class="mt-3 text-xs text-ink-3">Note: {panel.notes}</p>}
+  </div>
+
+  <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-ink px-3 py-2 text-xs text-ink-3 sm:px-4">
+    <span class="num">
+      Captured <time datetime={panel.capturedAt}>{formatDate(panel.capturedAt)}</time>
+      {panel.source && (
+        <>
+          {' · '}
+          {sourceNumber ? (
+            <a href={`#source-${sourceNumber}`} class="link">
+              Source [{sourceNumber}]
+            </a>
+          ) : (
+            panel.source.title
+          )}
+        </>
+      )}
+    </span>
+    {panel.image && (
+      <a href={panel.image.url} class="inline-flex items-center gap-1 link">
+        View label photo <Icon name="arrow-up-right" size={12} />
+      </a>
+    )}
+  </footer>
+</article>

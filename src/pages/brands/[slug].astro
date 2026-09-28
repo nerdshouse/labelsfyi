@@ -1,0 +1,76 @@
+---
+import ProductRow from '@/components/product/ProductRow.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import type { BrandDetail } from '@/lib/content/types';
+import { brandPage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.brands.map((brand) => ({ params: { slug: brand.slug }, props: { brand } }));
+}
+interface Props {
+  brand: BrandDetail;
+}
+const { brand: b } = Astro.props;
+const crumbs = [
+  { name: 'Brands', href: '/brands' },
+  { name: b.name, href: routes.brand(b.slug) },
+];
+---
+
+<BaseLayout
+  title={`${b.name}: supplement labels decoded`}
+  description={`Label breakdowns, claims and cost per serving for ${b.products.length} ${b.name} products.`}
+  canonicalPath={routes.brand(b.slug)}
+  noindex={b.noindex}
+  crumbs={crumbs}
+  jsonLd={brandPage(b)}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {b.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This brand" />
+      </div>
+    )}
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">Brand{b.countryOfOrigin && ` · ${b.countryOfOrigin}`}</p>
+      <h1 class="display mt-2">{b.name}</h1>
+      {b.description && <p class="lede mt-4">{b.description}</p>}
+      {b.websiteUrl && (
+        <p class="mt-3 text-sm">
+          <a href={b.websiteUrl} rel="nofollow noopener" class="link">
+            Brand website
+          </a>
+        </p>
+      )}
+    </header>
+    <section class="mt-12">
+      <SectionHead
+        id="products"
+        kicker="Products"
+        title={`${b.products.length} product${b.products.length === 1 ? '' : 's'} decoded`}
+      />
+      {b.products.length ? (
+        b.products.map((p) => <ProductRow product={p} headingLevel="h2" />)
+      ) : (
+        <EmptyState title="No products published yet">
+          We haven’t published any breakdowns for this brand yet.
+        </EmptyState>
+      )}
+    </section>
+    <p class="notice-quiet mt-10 max-w-3xl">
+      labels.fyi is independent of every brand we cover. Brands can submit corrections or responses
+      with supporting evidence.{' '}
+      <a href="/methodology#corrections" class="link">
+        How brand responses work
+      </a>
+    </p>
+  </div>
+</BaseLayout>

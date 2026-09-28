@@ -1,0 +1,52 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import EmptyState from '@/components/ui/EmptyState.astro';
+import Icon from '@/components/ui/Icon.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import { routes } from '@/lib/seo/site';
+
+const { comparisons } = await getContentGraph();
+const crumbs = [{ name: 'Compare', href: '/compare' }];
+---
+
+<BaseLayout
+  title="Supplement comparisons: cost per effective dose"
+  description="Side-by-side supplement comparisons built from label data: amount per serving, veg status and what you actually pay per effective dose."
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <h1 class="display">Compare</h1>
+      <p class="lede mt-4">
+        Comparisons normalise every product to the same dose, so a ₹699 tub and a ₹1,099 bottle can
+        be compared fairly.
+      </p>
+    </header>
+    {comparisons.length ? (
+      <ul class="mt-12 border-t-[6px] border-ink">
+        {comparisons.map((c) => (
+          <li class="border-b border-line">
+            <a
+              href={routes.comparison(c.slug)}
+              class="group grid gap-x-8 gap-y-1 py-5 md:grid-cols-[1fr_auto]"
+            >
+              <span>
+                <span class="block text-xl font-semibold group-hover:underline">{c.title}</span>
+                {c.dek && <span class="mt-1 block text-ink-2">{c.dek}</span>}
+              </span>
+              <span class="num flex items-center gap-2 font-mono text-sm text-ink-3">
+                {c.productCount} products <Icon name="arrow-right" size={14} />
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <EmptyState title="No comparisons yet" class="mt-10">
+        Comparisons will appear once enough products in a category are published.
+      </EmptyState>
+    )}
+  </div>
+</BaseLayout>

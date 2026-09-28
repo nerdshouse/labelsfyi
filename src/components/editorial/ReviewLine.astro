@@ -1,0 +1,49 @@
+---
+import type { EditorialMeta } from '@/lib/content/types';
+import { latestReview, reviewState } from '@/lib/editorial/review';
+import { formatDate } from '@/lib/formatting/dates';
+import { routes } from '@/lib/seo/site';
+
+/** Compact provenance line shown near the top of every reviewed page. */
+interface Props {
+  meta: Pick<EditorialMeta, 'reviews' | 'workflowStatus'>;
+  verifiedAt?: string | null;
+  verifiedLabel?: string;
+}
+const { meta, verifiedAt, verifiedLabel = 'Label checked' } = Astro.props;
+const review = latestReview(meta);
+const state = reviewState(meta);
+---
+
+<div class="space-y-3">
+  <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
+    {review ? (
+      <span>
+        Reviewed by{' '}
+        <a href={routes.reviewer(review.reviewer.slug)} class="link font-medium text-ink">
+          {review.reviewer.name}
+        </a>
+        , {review.reviewer.credentials}
+        {review.reviewer.isPlaceholder && <span class="tag tag-marker ml-1">Placeholder</span>}
+      </span>
+    ) : (
+      <span>Not yet reviewed by a qualified reviewer</span>
+    )}
+    {review && (
+      <span class="num text-ink-3">
+        Last reviewed <time datetime={review.reviewedAt}>{formatDate(review.reviewedAt)}</time>
+      </span>
+    )}
+    {verifiedAt && (
+      <span class="num text-ink-3">
+        {verifiedLabel} <time datetime={verifiedAt}>{formatDate(verifiedAt)}</time>
+      </span>
+    )}
+  </p>
+  {state === 'due' && (
+    <p class="notice" role="note">
+      <strong class="font-semibold text-ink">Due for review.</strong> This page was last reviewed{' '}
+      {formatDate(review?.reviewedAt)}. The label, price or evidence may have changed since then.
+    </p>
+  )}
+</div>

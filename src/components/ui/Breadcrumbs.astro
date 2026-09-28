@@ -1,0 +1,28 @@
+---
+import type { Crumb } from '@/lib/seo/jsonld';
+
+/** Visible breadcrumbs. The JSON-LD BreadcrumbList is emitted by the layout. */
+interface Props {
+  items: Crumb[];
+}
+const { items } = Astro.props;
+---
+
+<nav aria-label="Breadcrumb" class="caption text-ink-3">
+  <ol class="scroll-strip items-center gap-1.5 whitespace-nowrap">
+    {items.map((c, i) => (
+      <li class="flex items-center gap-1.5">
+        {i > 0 && <span aria-hidden="true">/</span>}
+        {i === items.length - 1 ? (
+          <span aria-current="page" class="max-w-[22ch] truncate text-ink">
+            {c.name}
+          </span>
+        ) : (
+          <a href={c.href} class="hover:text-ink hover:underline">
+            {c.name}
+          </a>
+        )}
+      </li>
+    ))}
+  </ol>
+</nav>

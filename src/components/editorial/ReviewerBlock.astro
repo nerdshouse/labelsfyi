@@ -1,0 +1,89 @@
+---
+import type { EditorialMeta } from '@/lib/content/types';
+import { latestReview, reviewState } from '@/lib/editorial/review';
+import { formatDate } from '@/lib/formatting/dates';
+import { routes } from '@/lib/seo/site';
+
+interface Props {
+  meta: Pick<EditorialMeta, 'reviews' | 'workflowStatus' | '_updatedAt'>;
+}
+const { meta } = Astro.props;
+const review = latestReview(meta);
+const state = reviewState(meta);
+const initials = review?.reviewer.name
+  .split(/\s+/)
+  .map((w) => w[0])
+  .join('')
+  .slice(0, 2);
+---
+
+<div class="grid gap-6 md:grid-cols-[1fr_auto]">
+  {review ? (
+    <div class="flex gap-4">
+      {review.reviewer.photo ? (
+        <img
+          src={review.reviewer.photo.url}
+          alt=""
+          width="56"
+          height="56"
+          loading="lazy"
+          class="size-14 shrink-0 rounded-full border border-ink object-cover"
+        />
+      ) : (
+        <span
+          class="flex size-14 shrink-0 items-center justify-center rounded-full border border-ink bg-paper-2 font-mono text-sm font-semibold"
+          aria-hidden="true"
+        >
+          {initials}
+        </span>
+      )}
+      <div>
+        <p class="caption text-ink-3">Reviewed by</p>
+        <p class="mt-0.5 text-lg font-semibold">
+          <a href={routes.reviewer(review.reviewer.slug)} class="link">
+            {review.reviewer.name}
+          </a>
+          {review.reviewer.isPlaceholder && (
+            <span class="tag tag-marker ml-2 align-middle">Placeholder</span>
+          )}
+        </p>
+        <p class="text-sm text-ink-2">
+          {review.reviewer.credentials}
+          {review.reviewer.organization && `, ${review.reviewer.organization}`}
+        </p>
+        {review.reviewer.isPlaceholder && (
+          <p class="mt-2 max-w-md text-xs text-ink-3">
+            Placeholder reviewer for development. Live pages are reviewed by a named, qualified
+            professional.
+          </p>
+        )}
+      </div>
+    </div>
+  ) : (
+    <p class="text-sm text-ink-2">This page has not yet been reviewed by a qualified reviewer.</p>
+  )}
+  <dl class="num grid grid-cols-2 gap-x-8 gap-y-2 text-sm md:text-right">
+    <div>
+      <dt class="caption text-ink-3">Last reviewed</dt>
+      <dd>{formatDate(review?.reviewedAt)}</dd>
+    </div>
+    <div>
+      <dt class="caption text-ink-3">Next review</dt>
+      <dd class:list={[state === 'due' && 'marker font-semibold']}>
+        {state === 'due' ? 'Overdue' : formatDate(review?.nextReviewAt)}
+      </dd>
+    </div>
+    <div>
+      <dt class="caption text-ink-3">Last updated</dt>
+      <dd>{formatDate(meta._updatedAt)}</dd>
+    </div>
+    <div>
+      <dt class="caption text-ink-3">Method</dt>
+      <dd>
+        <a href="/methodology" class="link">
+          How we review
+        </a>
+      </dd>
+    </div>
+  </dl>
+</div>

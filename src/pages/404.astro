@@ -1,0 +1,22 @@
+---
+import SearchBox from '@/components/search/SearchBox.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Page not found" description="This page doesn't exist." noindex hideHeaderSearch>
+  <div class="page py-16 sm:py-24">
+    <p class="caption text-ink-3">404 · Not on the label</p>
+    <h1 class="display mt-4 max-w-2xl">We couldn’t find that page.</h1>
+    <p class="lede mt-5 max-w-xl">
+      It may have moved, or the product hasn’t been decoded yet. Try searching instead.
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <SearchBox variant="page" id="notfound-search" />
+    </div>
+    <p class="mt-6 text-sm">
+      <a href="/" class="link">
+        Back to the homepage
+      </a>
+    </p>
+  </div>
+</BaseLayout>

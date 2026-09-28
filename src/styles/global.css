@@ -1,0 +1,338 @@
+/*
+ * labels.fyi design system
+ * ─────────────────────────────────────────────────────────────────────────
+ * The visual language borrows from the thing we decode: the printed label.
+ * Heavy and hairline rules, tabular numerals, compact uppercase captions,
+ * warm paper, black ink, and a single highlighter accent.
+ *
+ * All values live here as tokens. Components use the generated utilities
+ * (bg-paper, text-ink-2, font-mono, …) or the component classes below.
+ * See docs/design-system.md.
+ */
+
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@fontsource-variable/newsreader';
+@import 'tailwindcss';
+
+@theme {
+  /* ── Colour ─────────────────────────────────────────── */
+  --color-*: initial;
+  --color-paper: #f5f2ea;
+  --color-paper-2: #ece7da;
+  --color-paper-3: #e2dccb;
+  --color-sheet: #fbf9f4;
+  --color-ink: #16150f;
+  --color-ink-2: #3b3830;
+  --color-ink-3: #69645a;
+  --color-line: #d3ccbb;
+  --color-line-2: #e3ddcf;
+  --color-marker: #ffc933;
+  --color-marker-soft: #ffeaa3;
+  --color-veg: #1b7a33;
+  --color-nonveg: #8b3a12;
+  --color-unknown: #7a756a;
+  --color-alert: #9b2c1f;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* ── Type ───────────────────────────────────────────── */
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-serif: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.35rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.55rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.7rem;
+  --text-xl: 1.3125rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
+  --text-2xl--line-height: 1.15;
+  --text-3xl: clamp(1.875rem, 1.4rem + 2.2vw, 2.625rem);
+  --text-3xl--line-height: 1.08;
+  --text-display: clamp(2.5rem, 1.6rem + 4.6vw, 4.75rem);
+  --text-display--line-height: 0.98;
+
+  --tracking-caps: 0.08em;
+  --tracking-tight: -0.02em;
+  --tracking-display: -0.035em;
+
+  /* ── Shape ──────────────────────────────────────────── */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+
+  --shadow-pop: 0 1px 0 var(--color-ink), 0 12px 32px -12px rgb(22 21 15 / 0.35);
+
+  /* ── Layout ─────────────────────────────────────────── */
+  --container-page: 74rem;
+  --container-prose: 40rem;
+
+  /* Rule weights (the label's thick and thin bars) */
+  --rule-heavy: 6px;
+  --rule-medium: 3px;
+  --rule-thin: 1px;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    /* Header + mobile nav row + sticky in-page nav */
+    scroll-padding-top: 9.5rem;
+    @media (min-width: 48rem) {
+      scroll-padding-top: 7.5rem;
+    }
+  }
+  body {
+    @apply bg-paper font-sans text-base text-ink antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+  }
+  ::selection {
+    background: var(--color-marker);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-marker);
+    border-radius: var(--radius-xs);
+  }
+  a {
+    color: inherit;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ── Components ───────────────────────────────────────────────────────── */
+
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-(--container-page) px-4 sm:px-6;
+  }
+
+  .display {
+    @apply font-serif text-display font-medium;
+    letter-spacing: var(--tracking-display);
+  }
+  .h1 {
+    @apply font-serif text-3xl font-medium;
+    letter-spacing: var(--tracking-tight);
+  }
+  .h2 {
+    @apply font-serif text-2xl font-medium;
+    letter-spacing: var(--tracking-tight);
+  }
+  .h3 {
+    @apply text-lg leading-snug font-semibold;
+    letter-spacing: -0.01em;
+  }
+  .lede {
+    @apply text-lg text-ink-2;
+  }
+
+  /* Highlighter mark: used sparingly for the single most important fact. */
+  .marker {
+    background: linear-gradient(
+      to bottom,
+      transparent 8%,
+      var(--color-marker) 8%,
+      var(--color-marker) 92%,
+      transparent 92%
+    );
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding-inline: 0.12em;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-ink px-4 text-sm font-semibold whitespace-nowrap transition-[background,color,box-shadow];
+  }
+  .btn:hover {
+    box-shadow: 3px 3px 0 var(--color-ink);
+  }
+  .btn-primary {
+    @apply bg-ink text-paper;
+  }
+  .btn-primary:hover {
+    @apply bg-ink-2;
+  }
+  .btn-quiet {
+    @apply bg-sheet text-ink;
+  }
+
+  /* Tag: tiny mono token for metadata (not decoration). */
+  .tag {
+    @apply inline-flex items-center gap-1 rounded-xs border border-line px-1.5 py-px font-mono text-2xs font-medium tracking-wide text-ink-2 uppercase;
+  }
+  .tag-ink {
+    @apply border-ink bg-ink text-paper;
+  }
+  .tag-marker {
+    @apply border-marker bg-marker text-ink;
+  }
+
+  /* Notice: a ruled callout, no rounded box. */
+  .notice {
+    @apply border-l-[3px] border-marker bg-marker-soft/50 px-4 py-3 text-sm text-ink-2;
+  }
+  .notice-quiet {
+    @apply border-l-[3px] border-line bg-paper-2/60 px-4 py-3 text-sm text-ink-2;
+  }
+
+  /* Section heading row: caption + serif heading over a heavy rule. */
+  .section-head {
+    @apply rule-heavy flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 pt-3;
+  }
+
+  /* Label-style facts table (nutrition / supplement facts). */
+  .facts {
+    @apply w-full border-collapse text-sm;
+  }
+  .facts th,
+  .facts td {
+    @apply border-b border-line py-2 align-baseline;
+  }
+  .facts thead th {
+    @apply caption border-b-[3px] border-ink pb-2 text-left text-ink-3;
+  }
+  .facts td.n,
+  .facts th.n {
+    @apply num pl-3 text-right whitespace-nowrap;
+  }
+  .facts tr.indent > :first-child {
+    @apply pl-5 text-ink-2;
+  }
+
+  /* Portable Text / long-form prose */
+  .prose-lf {
+    @apply max-w-(--container-prose) text-[1.0625rem] leading-[1.7] text-ink-2;
+  }
+  .prose-lf > * + * {
+    margin-top: 1em;
+  }
+  .prose-lf h2 {
+    @apply mt-10 font-serif text-2xl font-medium text-ink;
+    letter-spacing: var(--tracking-tight);
+  }
+  .prose-lf h3 {
+    @apply mt-8 text-lg font-semibold text-ink;
+  }
+  .prose-lf strong {
+    @apply font-semibold text-ink;
+  }
+  .prose-lf a {
+    @apply link text-ink;
+  }
+  .prose-lf ul,
+  .prose-lf ol {
+    @apply space-y-2 pl-5;
+  }
+  .prose-lf ul {
+    list-style: square;
+  }
+  .prose-lf ol {
+    @apply list-decimal;
+  }
+  .prose-lf li::marker {
+    @apply text-ink-3;
+  }
+  .prose-lf blockquote {
+    @apply border-l-[3px] border-ink pl-4 italic;
+  }
+
+  /* Horizontal scroll strip (in-page nav, chips on mobile) */
+  .scroll-strip {
+    @apply flex overflow-x-auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-strip::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Utilities (composable via @apply) ───────────────────────────────── */
+
+/* Caption: the compact, uppercase, mono label used for section kickers,
+   table headers and metadata. */
+@utility caption {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--text-2xs--line-height);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'zero';
+}
+
+/* Rules: the label's visual grammar. */
+@utility rule-heavy {
+  border-top: var(--rule-heavy) solid var(--color-ink);
+}
+@utility rule-medium {
+  border-top: var(--rule-medium) solid var(--color-ink);
+}
+@utility rule {
+  border-top: var(--rule-thin) solid var(--color-ink);
+}
+@utility hairline {
+  border-top: var(--rule-thin) solid var(--color-line);
+}
+
+@utility link {
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-ink) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 120ms;
+  &:hover {
+    text-decoration-color: var(--color-ink);
+    text-decoration-thickness: 2px;
+  }
+}
+
+@utility sr-only-focusable {
+  &:not(:focus) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

@@ -1,0 +1,57 @@
+---
+import type { AssessmentStatus } from '@/lib/content/types';
+import { ASSESSMENT } from '@/lib/editorial/meta';
+
+/**
+ * Neutral, colour-independent glyphs for claim assessments. Shape carries
+ * the meaning (filled → half → dotted centre → dashed → struck), so the scale
+ * reads without red/green judgement and works for colour-blind users.
+ */
+interface Props {
+  status: AssessmentStatus;
+  size?: number;
+  withLabel?: boolean;
+  class?: string;
+}
+const { status, size = 14, withLabel = false, class: className } = Astro.props;
+const label = ASSESSMENT[status].label;
+---
+
+<span class:list={['inline-flex items-center gap-1.5', className]}>
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.6"
+    role="img"
+    aria-label={withLabel ? undefined : label}
+    aria-hidden={withLabel ? 'true' : undefined}
+    class="shrink-0"
+  >
+    {status === 'supported' && <circle cx="8" cy="8" r="6.2" fill="currentColor" />}
+    {status === 'partially_supported' && (
+      <>
+        <circle cx="8" cy="8" r="6.2" />
+        <path d="M8 1.8a6.2 6.2 0 0 1 0 12.4Z" fill="currentColor" stroke="none" />
+      </>
+    )}
+    {status === 'requires_context' && (
+      <>
+        <circle cx="8" cy="8" r="6.2" />
+        <circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none" />
+      </>
+    )}
+    {status === 'insufficient_evidence' && (
+      <circle cx="8" cy="8" r="6.2" stroke-dasharray="2.4 2" />
+    )}
+    {status === 'not_verifiable' && (
+      <>
+        <circle cx="8" cy="8" r="6.2" />
+        <path d="M3.6 12.4 12.4 3.6" />
+      </>
+    )}
+  </svg>
+  {withLabel && <span>{label}</span>}
+</span>

@@ -1,0 +1,70 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+import { imageSrc, imageSrcset } from '@/lib/content/image';
+import type { ImageData, ProductSummary } from '@/lib/content/types';
+import { FORMAT_LABEL } from '@/lib/editorial/meta';
+
+/**
+ * Product/label image, or, when no photo has been captured, a typographic
+ * stand-in that is honest about it. We never use stock imagery for products.
+ */
+interface Props {
+  product: Pick<ProductSummary, 'name' | 'brand' | 'format' | 'vegStatus' | 'servingSizeText'>;
+  image?: ImageData | null;
+  size?: 'sm' | 'lg';
+  eager?: boolean;
+}
+const { product, image, size = 'lg', eager = false } = Astro.props;
+const initials = product.brand.name
+  .split(/\s+/)
+  .map((w) => w[0])
+  .join('')
+  .slice(0, 2);
+---
+
+{image ? (
+  <figure class:list={[size === 'sm' ? 'w-12' : 'w-full']}>
+    <img
+      src={imageSrc(image, size === 'sm' ? 120 : 960)}
+      srcset={size === 'lg' ? imageSrcset(image) : undefined}
+      sizes={size === 'lg' ? '(min-width: 1024px) 420px, 100vw' : undefined}
+      alt={image.alt || `${product.brand.name} ${product.name} label`}
+      width={image.width ?? undefined}
+      height={image.height ?? undefined}
+      loading={eager ? 'eager' : 'lazy'}
+      fetchpriority={eager ? 'high' : undefined}
+      decoding="async"
+      class="aspect-[4/5] w-full border border-line bg-sheet object-contain"
+      style={image.lqip ? `background-image:url(${image.lqip});background-size:cover` : undefined}
+    />
+    {image.caption && size === 'lg' && (
+      <figcaption class="mt-2 text-xs text-ink-3">{image.caption}</figcaption>
+    )}
+  </figure>
+) : size === 'sm' ? (
+  <div
+    class="relative flex aspect-[4/5] w-12 shrink-0 items-end border border-ink/80 bg-paper-2 p-1"
+    aria-hidden="true"
+  >
+    <span class="absolute inset-x-1 top-1 border-t-[3px] border-ink" />
+    <span class="font-mono text-[0.625rem] leading-none font-semibold">{initials}</span>
+    <VegMark status={product.vegStatus} size={9} class="absolute top-2.5 right-1" />
+  </div>
+) : (
+  <figure class="relative w-full">
+    <div class="flex aspect-[4/5] w-full flex-col bg-paper-3 p-5 sm:p-7" aria-hidden="true">
+      <div class="flex flex-1 flex-col border border-ink bg-sheet p-4 sm:p-5">
+        <div class="flex items-start justify-between gap-3 border-b-[6px] border-ink pb-2">
+          <span class="caption text-ink-2">{product.brand.name}</span>
+          <VegMark status={product.vegStatus} size={16} />
+        </div>
+        <p class="mt-4 font-serif text-2xl leading-tight font-medium">{product.name}</p>
+        <div class="mt-auto space-y-1 border-t border-ink pt-2 font-mono text-xs text-ink-2">
+          <p>{FORMAT_LABEL[product.format] ?? product.format}</p>
+          {product.servingSizeText && <p>Serving: {product.servingSizeText}</p>}
+        </div>
+      </div>
+    </div>
+    <figcaption class="caption mt-2 text-ink-3">No label photo captured yet</figcaption>
+  </figure>
+)}

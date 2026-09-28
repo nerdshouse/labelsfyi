@@ -1,0 +1,15 @@
+---
+/** A quiet, explanatory empty state. Says what is missing and why. */
+interface Props {
+  title: string;
+  class?: string;
+}
+const { title, class: className } = Astro.props;
+---
+
+<div class:list={['notice-quiet', className]}>
+  <p class="font-semibold text-ink">{title}</p>
+  <div class="mt-1">
+    <slot />
+  </div>
+</div>

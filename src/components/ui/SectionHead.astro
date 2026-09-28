@@ -1,0 +1,22 @@
+---
+/**
+ * Section heading: caption kicker + serif heading on a heavy rule.
+ * `id` makes the section addressable from the in-page nav.
+ */
+interface Props {
+  id?: string;
+  kicker?: string;
+  title: string;
+  level?: 2 | 3;
+}
+const { id, kicker, title, level = 2 } = Astro.props;
+const Tag = level === 2 ? 'h2' : 'h3';
+---
+
+<header class="section-head mb-5" id={id}>
+  <div>
+    {kicker && <p class="caption mb-1 text-ink-3">{kicker}</p>}
+    <Tag class={level === 2 ? 'h2' : 'h3'}>{title}</Tag>
+  </div>
+  <slot name="aside" />
+</header>

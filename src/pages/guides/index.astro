@@ -1,0 +1,38 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { readingMinutes } from '@/lib/content/portable-text';
+import { getContentGraph } from '@/lib/content/repository';
+import { routes } from '@/lib/seo/site';
+
+const { guides } = await getContentGraph();
+const crumbs = [{ name: 'Guides', href: '/guides' }];
+---
+
+<BaseLayout
+  title="Guides: how to read supplement labels"
+  description="Practical guides to reading supplement labels in India: veg marks, serving sizes, proprietary blends and cost per serving."
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <h1 class="display">Guides</h1>
+      <p class="lede mt-4">Short, practical guides to reading labels for yourself.</p>
+    </header>
+    <ol class="mt-12 grid gap-x-10 border-t-[6px] border-ink md:grid-cols-2">
+      {guides.map((g, n) => (
+        <li class="border-b border-line">
+          <a href={routes.guide(g.slug)} class="group grid grid-cols-[2.5rem_1fr] gap-x-2 py-6">
+            <span class="num font-mono text-sm text-ink-3">{String(n + 1).padStart(2, '0')}</span>
+            <span>
+              <span class="h3 block group-hover:underline">{g.title}</span>
+              {g.dek && <span class="mt-1 block text-sm text-ink-2">{g.dek}</span>}
+              <span class="caption mt-2 block text-ink-3">{readingMinutes(g.body)} min read</span>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </div>
+</BaseLayout>

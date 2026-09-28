@@ -1,0 +1,38 @@
+---
+import Icon from '@/components/ui/Icon.astro';
+import { isCommercial, offerHref, offerRel } from '@/lib/affiliates';
+import type { AffiliateOfferData } from '@/lib/content/types';
+
+/**
+ * The only way an outbound retail link is rendered. Handles rel="sponsored",
+ * the per-link "Affiliate" label and click tracking (product, merchant, page,
+ * timestamp via data-track).
+ */
+interface Props {
+  offer: AffiliateOfferData;
+  productId: string;
+  productName: string;
+}
+const { offer, productId, productName } = Astro.props;
+const commercial = isCommercial(offer);
+---
+
+<a
+  href={offerHref(offer)}
+  rel={offerRel(offer)}
+  target="_blank"
+  class="btn btn-quiet w-full sm:w-auto"
+  data-track="affiliate_click"
+  data-product={productId}
+  data-merchant={offer.merchant.slug}
+  data-relationship={offer.relationship}
+  aria-label={`View ${productName} on ${offer.merchant.name}${commercial ? ' (affiliate link, opens in new tab)' : ' (opens in new tab)'}`}
+>
+  View on {offer.merchant.name}
+  <Icon name="arrow-up-right" size={14} />
+</a>
+{commercial && (
+  <span class="caption mt-1 block text-ink-3 sm:text-right">
+    {offer.relationship === 'sponsored' ? 'Sponsored' : 'Affiliate link'}
+  </span>
+)}

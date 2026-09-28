@@ -1,0 +1,79 @@
+---
+import Icon from '@/components/ui/Icon.astro';
+
+/**
+ * Search field with progressive autocomplete.
+ * Without JS it is a plain GET form to /search. With JS it lazily loads the
+ * static index on first focus and offers keyboard-navigable suggestions
+ * (ARIA 1.2 combobox pattern).
+ */
+interface Props {
+  variant?: 'hero' | 'compact' | 'page';
+  value?: string;
+  autofocus?: boolean;
+  id?: string;
+}
+const { variant = 'compact', value = '', autofocus = false, id = 'search' } = Astro.props;
+const listId = `${id}-listbox`;
+const placeholder = 'Search a product, ingredient or brand';
+---
+
+<form
+  action="/search"
+  method="get"
+  role="search"
+  class:list={['relative w-full', variant === 'compact' && 'max-w-xs']}
+  data-search-box
+>
+  <label for={id} class="sr-only">
+    Search labels.fyi
+  </label>
+  <div
+    class:list={[
+      'flex items-center border-ink bg-sheet focus-within:shadow-[0_0_0_4px_var(--color-marker)]',
+      variant === 'hero' && 'h-16 border-2 pr-2 pl-4 sm:h-[4.5rem] sm:pl-5',
+      variant === 'page' && 'h-14 border-2 pr-2 pl-4',
+      variant === 'compact' && 'h-10 border pr-1 pl-3',
+    ]}
+  >
+    <Icon name="search" size={variant === 'compact' ? 15 : 20} class="text-ink-3" />
+    <input
+      id={id}
+      name="q"
+      type="search"
+      value={value}
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      enterkeyhint="search"
+      placeholder={placeholder}
+      autofocus={autofocus}
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls={listId}
+      class:list={[
+        'min-w-0 flex-1 bg-transparent px-3 text-ink placeholder:text-ink-3 focus:outline-none',
+        '[&::-webkit-search-cancel-button]:hidden',
+        variant === 'hero' ? 'text-lg sm:text-xl' : variant === 'page' ? 'text-lg' : 'text-sm',
+      ]}
+    />
+    {variant !== 'compact' && (
+      <button type="submit" class="btn btn-primary h-11 px-4 sm:px-5 max-sm:hidden">
+        Search
+      </button>
+    )}
+  </div>
+  <ul
+    id={listId}
+    role="listbox"
+    aria-label="Suggestions"
+    hidden
+    class="absolute inset-x-0 top-full z-40 mt-1 max-h-[70vh] overflow-y-auto border border-ink bg-sheet shadow-(--shadow-pop)"
+  ></ul>
+</form>
+
+<script>
+  import { initSearchBoxes } from './search-client';
+  initSearchBoxes();
+</script>

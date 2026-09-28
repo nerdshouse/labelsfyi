@@ -1,0 +1,28 @@
+---
+/**
+ * Sticky in-page section nav. On phones it is a swipeable strip that sits
+ * under the header, so any section is one tap away.
+ */
+interface Props {
+  items: Array<{ id: string; label: string }>;
+}
+const { items } = Astro.props;
+---
+
+<nav
+  aria-label="On this page"
+  class="sticky top-24 z-20 mt-8 border-y border-ink bg-paper/95 backdrop-blur-sm md:top-16"
+>
+  <ul class="page scroll-strip h-11 items-stretch gap-6">
+    {items.map((item) => (
+      <li class="flex">
+        <a
+          href={`#${item.id}`}
+          class="caption flex items-center border-b-2 border-transparent whitespace-nowrap text-ink-2 hover:border-ink hover:text-ink"
+        >
+          {item.label}
+        </a>
+      </li>
+    ))}
+  </ul>
+</nav>

@@ -1,0 +1,206 @@
+---
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import VegMark from '@/components/ui/VegMark.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { AFFILIATE_DISCLOSURE } from '@/lib/affiliates';
+import { PRICE_STALE_AFTER_DAYS } from '@/lib/calculations';
+import { VEG_STATUSES } from '@/lib/content/types';
+import { ASSESSMENT, ASSESSMENT_ORDER, VEG } from '@/lib/editorial/meta';
+
+const crumbs = [{ name: 'Methodology', href: '/methodology' }];
+const vegNotes: Record<(typeof VEG_STATUSES)[number], string> = {
+  VEGETARIAN:
+    'The label shows the green vegetarian mark and no listed ingredient contradicts it. We never infer vegetarian status from the absence of meat ingredients.',
+  VEGAN:
+    'The label or brand states the product is vegan and no animal-derived ingredient is listed.',
+  NON_VEGETARIAN:
+    'The label shows the brown non-vegetarian mark, or lists an animal-derived ingredient such as gelatin.',
+  UNKNOWN: 'We could not verify it from the label. We never guess.',
+};
+const workflow = [
+  ['Draft', 'An editor transcribes the label from dated photos and records observations.'],
+  ['Fact check', 'A second person checks every number against the label images and sources.'],
+  [
+    'Dietitian review',
+    'A qualified reviewer checks claims, evidence summaries and health context.',
+  ],
+  ['Approved', 'Only approved content can be published.'],
+  ['Published', 'The page goes live with its reviewer and review date.'],
+  [
+    'Needs review',
+    'When the review date passes or the label changes, the page is flagged publicly.',
+  ],
+];
+---
+
+<BaseLayout
+  title="Methodology: how labels.fyi decodes a label"
+  description="How labels.fyi records label data, assesses claims against evidence, calculates cost per serving, handles veg status, reviews content and discloses affiliate relationships."
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">Methodology</p>
+      <h1 class="display mt-2">How we decode a label</h1>
+      <p class="lede mt-5">
+        labels.fyi separates four things that product marketing blurs together: what the label says,
+        what the manufacturer claims, what the evidence says, and what we conclude.
+      </p>
+    </header>
+
+    <div class="mt-16 max-w-4xl space-y-20">
+      <section>
+        <SectionHead id="label-data" kicker="01" title="Label data & observations" />
+        <div class="prose-lf">
+          <p>
+            Every factual statement about a product traces back to a dated{' '}
+            <strong>observation</strong>: a label photo, a panel transcription or a retailer
+            listing, with who recorded it and when.
+          </p>
+          <p>
+            When a label changes, we capture the new version and mark the old one as superseded. We
+            never silently overwrite earlier observations; the history is shown on each product
+            page.
+          </p>
+          <p>
+            We don’t laboratory-test products unless a page says so explicitly and links to the test
+            report. Amounts are as declared by the manufacturer.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <SectionHead id="assessments" kicker="02" title="How we assess claims" />
+        <p class="prose-lf">
+          Each claim is quoted exactly as printed, then assessed against the label and published
+          evidence using a neutral five-point vocabulary. We don’t give products scores, stars or
+          ratings.
+        </p>
+        <dl class="mt-6 border-t border-ink">
+          {ASSESSMENT_ORDER.map((s) => (
+            <div class="grid gap-2 border-b border-line py-4 sm:grid-cols-[14rem_1fr]">
+              <dt class="font-semibold">
+                <AssessmentGlyph status={s} size={16} withLabel />
+              </dt>
+              <dd class="text-ink-2">{ASSESSMENT[s].description}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="prose-lf mt-6">
+          Evidence is weighted by type: systematic reviews, meta-analyses and positions of
+          professional bodies over single studies; human studies over animal or lab studies. We
+          avoid disease-treatment framing and never give personal medical advice.
+        </p>
+      </section>
+
+      <section>
+        <SectionHead id="veg" kicker="03" title="Veg status" />
+        <dl class="border-t border-ink">
+          {VEG_STATUSES.map((v) => (
+            <div class="grid gap-2 border-b border-line py-4 sm:grid-cols-[14rem_1fr]">
+              <dt class="font-semibold">
+                <VegMark status={v} size={16} withLabel />
+              </dt>
+              <dd class="text-ink-2">{vegNotes[v]}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="mt-4 text-sm text-ink-3">
+          Every status includes a written reason and the observation it’s based on.{' '}
+          {VEG.UNKNOWN.label} is a valid, honest answer.
+        </p>
+      </section>
+
+      <section>
+        <SectionHead id="prices" kicker="04" title="How we calculate cost" />
+        <div class="prose-lf">
+          <p>
+            Prices are dated observations from specific retailers, not live prices. We never present
+            an old price as current: observations older than {PRICE_STALE_AFTER_DAYS} days are
+            flagged.
+          </p>
+          <ul>
+            <li>
+              <strong>Cost per serving</strong> = pack price ÷ servings per pack. If servings aren’t
+              printed, we use pack weight ÷ serving size and say so.
+            </li>
+            <li>
+              <strong>Cost per 100 g</strong> = pack price ÷ pack weight × 100.
+            </li>
+            <li>
+              <strong>Cost per effective dose</strong> = pack price ÷ (servings × amount of the
+              active per serving ÷ reference dose). For example, ₹ per 5 g of creatine.
+            </li>
+          </ul>
+          <p>
+            If an amount is hidden in a proprietary blend, we show the cost as unavailable rather
+            than estimating it.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <SectionHead id="review" kicker="05" title="Editorial workflow & review" />
+        <ol class="border-t border-ink">
+          {workflow.map(([step, text], n) => (
+            <li class="grid grid-cols-[2.5rem_1fr] gap-2 border-b border-line py-3 sm:grid-cols-[2.5rem_12rem_1fr]">
+              <span class="num font-mono text-sm text-ink-3">{String(n + 1).padStart(2, '0')}</span>
+              <span class="font-semibold">{step}</span>
+              <span class="text-ink-2 max-sm:col-start-2">{text}</span>
+            </li>
+          ))}
+        </ol>
+        <p class="prose-lf mt-6">
+          Reviewers are named, with their credentials and the review date shown on every page. We
+          never publish reviews attributed to people who didn’t perform them.
+        </p>
+      </section>
+
+      <section>
+        <SectionHead
+          id="commercial"
+          kicker="06"
+          title="Affiliate links & commercial relationships"
+        />
+        <div class="prose-lf">
+          <p>{AFFILIATE_DISCLOSURE}</p>
+          <p>
+            Commercial links are always labelled on the link itself and marked{' '}
+            <code>rel="sponsored"</code>. Editorial, affiliate and sponsored content are clearly
+            distinguished. Commercial arrangements are handled separately from claim assessment, and
+            a retailer relationship never changes an assessment.
+          </p>
+          <p>We don’t accept payment for reviews, rankings or placement in comparisons.</p>
+        </div>
+      </section>
+
+      <section>
+        <SectionHead id="corrections" kicker="07" title="Corrections & brand responses" />
+        <div class="prose-lf">
+          <p>
+            If you find an error, email{' '}
+            <a href="mailto:corrections@labels.fyi">corrections@labels.fyi</a> with the product and,
+            ideally, a clear photo of the label. Brands can respond with supporting evidence such as
+            a current label or a certificate of analysis.
+          </p>
+          <p>
+            Accepted corrections are logged in the page’s update history with the date. Brand
+            responses will be shown alongside our assessment, clearly attributed to the brand.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <SectionHead id="medical" kicker="08" title="Not medical advice" />
+        <p class="prose-lf">
+          labels.fyi provides general information about product labels and published evidence. It is
+          not a diagnosis, treatment plan or personal recommendation. Speak to a doctor or
+          registered dietitian about your own needs.
+        </p>
+      </section>
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,56 @@
+{
+  "name": "labels-fyi",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "typecheck": "astro check",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "studio": "pnpm --filter @labels-fyi/studio run dev",
+    "studio:build": "pnpm --filter @labels-fyi/studio run build",
+    "studio:deploy": "pnpm --filter @labels-fyi/studio run deploy",
+    "demo:export": "node scripts/export-demo-dataset.ts",
+    "deploy:cf": "pnpm build && wrangler deploy",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm studio:typecheck && pnpm studio:validate && pnpm build && pnpm cf:dry-run",
+    "studio:typecheck": "pnpm --filter @labels-fyi/studio run typecheck",
+    "studio:validate": "pnpm --filter @labels-fyi/studio run validate",
+    "cf:dry-run": "wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/newsreader": "^5.3.0",
+    "@portabletext/to-html": "^6.0.0",
+    "@sanity/client": "^8.8.0",
+    "@sanity/image-url": "^2.1.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.5",
+    "groq-js": "^2.0.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.3",
+    "eslint": "^10.11.0",
+    "eslint-plugin-astro": "^3.2.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "prettier-plugin-astro": "^1.1.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.143.0"
+  }
+}

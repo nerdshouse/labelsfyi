@@ -1,0 +1,33 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import { routes } from '@/lib/seo/site';
+
+const { brands } = await getContentGraph();
+const crumbs = [{ name: 'Brands', href: '/brands' }];
+---
+
+<BaseLayout
+  title="Supplement brands"
+  description="Supplement brands with label breakdowns on labels.fyi."
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <h1 class="display mt-6">Brands</h1>
+    <ul class="mt-10 grid gap-x-10 border-t-[6px] border-ink sm:grid-cols-2 lg:grid-cols-3">
+      {brands.map((b) => (
+        <li class="border-b border-line">
+          <a
+            href={routes.brand(b.slug)}
+            class="flex items-baseline justify-between gap-3 py-4 hover:underline"
+          >
+            <span class="text-lg font-semibold">{b.name}</span>
+            <span class="num font-mono text-xs text-ink-3">{b.products.length} products</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>

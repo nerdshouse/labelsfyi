@@ -1,0 +1,118 @@
+---
+import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
+import ReviewLine from '@/components/editorial/ReviewLine.astro';
+import SourceList from '@/components/editorial/SourceList.astro';
+import ProductRow from '@/components/product/ProductRow.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import Icon from '@/components/ui/Icon.astro';
+import PortableText from '@/components/ui/PortableText.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { readingMinutes } from '@/lib/content/portable-text';
+import { getContentGraph } from '@/lib/content/repository';
+import type { GuideDetail } from '@/lib/content/types';
+import { formatDate } from '@/lib/formatting/dates';
+import { articlePage } from '@/lib/seo/jsonld';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.guides.map((guide) => ({ params: { slug: guide.slug }, props: { guide } }));
+}
+
+interface Props {
+  guide: GuideDetail;
+}
+const { guide: g } = Astro.props;
+const crumbs = [
+  { name: 'Guides', href: '/guides' },
+  { name: g.title, href: routes.guide(g.slug) },
+];
+const related = [
+  ...g.ingredients.map((i) => ({
+    kind: 'Ingredient',
+    title: i.name,
+    href: routes.ingredient(i.slug),
+  })),
+  ...g.comparisons.map((c) => ({
+    kind: 'Comparison',
+    title: c.title,
+    href: routes.comparison(c.slug),
+  })),
+];
+---
+
+<BaseLayout
+  title={g.seoTitle ?? g.title}
+  description={g.seoDescription ?? g.dek}
+  canonicalPath={routes.guide(g.slug)}
+  noindex={g.noindex}
+  crumbs={crumbs}
+  jsonLd={articlePage(g, routes.guide(g.slug))}
+  ogType="article"
+>
+  <article class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {g.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This guide" />
+      </div>
+    )}
+    <header class="mt-8 max-w-3xl">
+      <p class="caption text-ink-3">
+        Guide · {readingMinutes(g.body)} min read · {formatDate(g.publishedAt)}
+      </p>
+      <h1 class="h1 mt-3">{g.title}</h1>
+      {g.dek && <p class="lede mt-4">{g.dek}</p>}
+      <div class="mt-6 border-t border-ink pt-3">
+        <ReviewLine meta={g} verifiedAt={g._updatedAt} verifiedLabel="Updated" />
+      </div>
+    </header>
+
+    <div class="mt-10 grid gap-12 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <PortableText value={g.body} />
+      {related.length > 0 && (
+        <aside class="lg:sticky lg:top-24 lg:self-start">
+          <p class="caption rule-heavy pt-3 text-ink-3">Related</p>
+          <ul class="mt-2">
+            {related.map((r) => (
+              <li class="border-b border-line">
+                <a
+                  href={r.href}
+                  class="flex items-center justify-between gap-3 py-2.5 hover:underline"
+                >
+                  <span>
+                    <span class="caption block text-ink-3">{r.kind}</span>
+                    <span class="text-sm font-medium">{r.title}</span>
+                  </span>
+                  <Icon name="arrow-right" size={14} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
+    </div>
+
+    {g.products.length > 0 && (
+      <section class="mt-16">
+        <SectionHead id="products" kicker="Examples" title="Products mentioned" level={3} />
+        <div class="border-t border-ink">
+          {g.products.map((p) => (
+            <ProductRow product={p} />
+          ))}
+        </div>
+      </section>
+    )}
+
+    <section class="mt-16">
+      <SectionHead id="sources" kicker="Sources" title="Sources" level={3} />
+      <SourceList sources={g.sources} />
+    </section>
+    <section class="mt-16">
+      <SectionHead id="review" kicker="Review" title="Review" level={3} />
+      <ReviewerBlock meta={g} />
+    </section>
+  </article>
+</BaseLayout>

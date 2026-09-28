@@ -1,0 +1,14 @@
+---
+interface Props {
+  size?: 'sm' | 'md' | 'lg';
+}
+const { size = 'md' } = Astro.props;
+const cls = { sm: 'text-base', md: 'text-lg', lg: 'text-3xl' }[size];
+---
+
+<span class:list={['inline-flex items-baseline leading-none font-semibold tracking-tight', cls]}>
+  <span>labels</span>
+  <span class="ml-px rounded-xs bg-marker px-[0.18em] py-[0.08em] font-mono text-[0.86em] font-medium">
+    .fyi
+  </span>
+</span>

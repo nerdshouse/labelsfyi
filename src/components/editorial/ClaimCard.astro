@@ -1,0 +1,74 @@
+---
+import SourceCite from '@/components/editorial/SourceCite.astro';
+import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
+import type { ClaimData } from '@/lib/content/types';
+import { CLAIM_TYPE } from '@/lib/editorial/meta';
+import { formatDate } from '@/lib/formatting/dates';
+
+/**
+ * The claim-vs-evidence unit, read top to bottom (or left to right on wide screens):
+ *
+ *   1. LABEL SAYS         the brand's words, verbatim, set like packaging copy
+ *   2. WHAT IT MEANS      our one-line assessment + neutral status glyph
+ *   3. EVIDENCE & CONTEXT explanation, then each piece of evidence with its source
+ *
+ * The brand's voice and ours are visually distinct. No colour judgement:
+ * shape carries the status.
+ */
+interface Props {
+  claim: ClaimData;
+  sourceNumbers: Map<string, number>;
+}
+const { claim, sourceNumbers } = Astro.props;
+const n = (id: string | undefined) => (id ? sourceNumbers.get(id) : undefined);
+---
+
+<li class="grid gap-x-10 gap-y-5 border-t border-ink py-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+  <div>
+    <p class="caption text-ink-3">
+      <span class="text-ink">1 · Label says</span>
+      {claim.locationOnProduct && ` · ${claim.locationOnProduct}`}
+    </p>
+    <blockquote class="mt-2 inline-block max-w-full border-2 border-ink bg-sheet px-3 py-2">
+      <p class="text-lg leading-tight font-extrabold tracking-tight sm:text-xl">
+        “{claim.exactClaim}”
+      </p>
+    </blockquote>
+    <p class="caption mt-2 text-ink-3">{CLAIM_TYPE[claim.claimType]} claim</p>
+  </div>
+
+  <div class="space-y-5 border-l-[3px] border-line pl-4 md:border-l-0 md:pl-0">
+    <div>
+      <p class="caption text-ink">2 · What it means</p>
+      <p class="mt-2 text-sm font-semibold">
+        <AssessmentGlyph status={claim.assessmentStatus} size={16} withLabel />
+      </p>
+      <p class="mt-1.5 font-serif text-lg leading-snug sm:text-xl">{claim.assessment}</p>
+    </div>
+
+    <div>
+      <p class="caption text-ink">3 · Evidence & context</p>
+      {claim.explanation && (
+        <p class="mt-2 text-sm leading-relaxed text-ink-2">{claim.explanation}</p>
+      )}
+      {claim.evidence.length > 0 && (
+        <ul class="mt-3 space-y-3">
+          {claim.evidence.map((e) => (
+            <li class="border-l border-ink pl-3 text-sm">
+              <p class="text-ink-2">{e.summary}</p>
+              {e.population && <p class="mt-0.5 text-xs text-ink-3">Studied in: {e.population}</p>}
+              <SourceCite source={e.source} number={n(e.source?._id)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    {claim.reviewer && (
+      <p class="text-xs text-ink-3">
+        Assessed by {claim.reviewer.name}
+        {claim.reviewedAt && <>, {formatDate(claim.reviewedAt)}</>}
+      </p>
+    )}
+  </div>
+</li>
