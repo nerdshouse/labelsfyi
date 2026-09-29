@@ -53,12 +53,15 @@
         "SANITY_PROJECT_ID": "r1eiikj7",
         "SANITY_DATASET": "production",
         "SANITY_API_VERSION": "2025-02-19",
-        // "true" only after confirming the dataset is private (the production
-        // build also proves it with an anonymous query).
-        "SUBMISSIONS_PRIVATE_DATASET": "true",
+        // Public label submissions are CLOSED for the initial launch: anything
+        // but "true" makes /api/submissions (and the analyser's "Submit for
+        // verification") answer 503 "Submissions are not open yet" before any
+        // upload is read or stored. Set "true" to open them (the dataset is
+        // verified private; the production build re-proves it every time).
+        "SUBMISSIONS_PRIVATE_DATASET": "false",
         // Cloudflare Access application protecting /internal/*.
-        "ACCESS_TEAM_DOMAIN": "",
-        "ACCESS_AUD": "",
+        "ACCESS_TEAM_DOMAIN": "gentle-glitter-5a69.cloudflareaccess.com",
+        "ACCESS_AUD": "f462a8558f5b9b748028c56bf2c36e3e0ac22e73a70da65b390a425ba41d3129",
       },
       // Private: no public access, no r2.dev, no custom domain. Photos are only
       // served through the authenticated /internal/review/image route.

@@ -126,6 +126,43 @@ if (process.env.DIST_MODE === 'production') {
     !/aggregateRating|ratingValue|reviewCount/.test(publicAll) &&
       !/cdn\.shopify\.com/.test(publicAll),
   );
+  // ── Production artifact hygiene: demo assets and local credential files ──
+  const allBuilt = [DIST, SERVER].filter((d) => existsSync(d)).flatMap((d) => walk(d));
+  const rel = (f: string) => f.slice(f.indexOf('/dist/') + 1);
+  const demoFiles = allBuilt.filter((f) => /\/demo\//.test(rel(f)));
+  check(
+    `production: no demo assets (/demo/) in the output${demoFiles.length ? ` — found ${demoFiles.slice(0, 3).map(rel).join(', ')}` : ''}`,
+    demoFiles.length === 0 && !existsSync(join(DIST, 'demo')),
+  );
+  const credentialFiles = allBuilt.filter((f) =>
+    /(^|\/)(\.dev\.vars(\..+)?|\.env(\..+)?)$/.test(f.slice(f.lastIndexOf('/'))),
+  );
+  check(
+    `production: no .dev.vars / .env* files in dist${credentialFiles.length ? ` — found ${credentialFiles.map(rel).join(', ')}` : ''}`,
+    credentialFiles.length === 0,
+  );
+  // Values (never names) of local secrets: from the environment and from any
+  // local credential file. Only file paths are ever printed, never values.
+  const SECRET_KEY = /TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE|AUTH/i;
+  const localValues = new Set<string>(secretValues);
+  const root = new URL('../', import.meta.url).pathname;
+  for (const dir of [root, join(root, 'sanity')])
+    for (const f of existsSync(dir) ? readdirSync(dir) : [])
+      if (/^(\.dev\.vars(\..+)?|\.env(\..+)?)$/.test(f) && !f.endsWith('.example'))
+        for (const line of readFileSync(join(dir, f), 'utf8').split('\n')) {
+          const m = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+          const value = m?.[2]?.trim().replace(/^(['"`])(.*)\1$/, '$2') ?? '';
+          if (m && SECRET_KEY.test(m[1]!) && value.length >= 8) localValues.add(value);
+        }
+  const leaking = allBuilt.filter((f) => {
+    const body = readFileSync(f, 'latin1');
+    return [...localValues].some((v) => body.includes(v));
+  });
+  check(
+    `production: no local secret value in any dist file, any extension (${localValues.size} value(s) checked)${leaking.length ? ` — found in ${leaking.map(rel).join(', ')}` : ''}`,
+    leaking.length === 0,
+  );
+
   const mails = new Set(publicAll.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []);
   check(
     'production: only labels.fyi emails',

@@ -2,6 +2,56 @@
 import { defineConfig, envField } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import cloudflare from '@astrojs/cloudflare';
+import { rm } from 'node:fs/promises';
+
+// A production build (pnpm build:production). Local/demo builds are untouched.
+const isProductionBuild =
+  process.env.DEPLOY_ENV === 'production' || process.env.CLOUDFLARE_ENV === 'production';
+
+// Local credential files that must never be written into production output.
+// @cloudflare/vite-plugin emits the local dev vars (from .dev.vars, or else
+// .env files) as `dist/server/.dev.vars` so `vite preview` works; in a
+// production build that would put local secrets next to the deployable Worker.
+const LOCAL_CREDENTIAL_FILE = /(^|\/)(\.dev\.vars(\..+)?|\.env(\..+)?)$/;
+
+/** Drops local credential files from every production bundle before they are written. */
+function noLocalCredentialsInProductionOutput() {
+  return {
+    name: 'labels-fyi:no-local-credentials-in-production-output',
+    enforce: /** @type {const} */ ('post'),
+    apply: /** @type {const} */ ('build'),
+    /** @param {unknown} _options @param {Record<string, unknown>} bundle */
+    generateBundle(_options, bundle) {
+      if (!isProductionBuild) return;
+      for (const fileName of Object.keys(bundle))
+        if (LOCAL_CREDENTIAL_FILE.test(fileName)) delete bundle[fileName];
+    },
+  };
+}
+
+/**
+ * Demo assets (public/demo/: fictional product art used by the demo dataset)
+ * stay available to local/demo builds but are removed from production output.
+ * scripts/check-dist.ts (DIST_MODE=production) fails if any remain.
+ * @returns {import('astro').AstroIntegration}
+ */
+function noDemoAssetsInProduction() {
+  /** @type {URL | undefined} */
+  let clientDir;
+  return {
+    name: 'labels-fyi:no-demo-assets-in-production',
+    hooks: {
+      'astro:config:done': ({ config }) => {
+        clientDir = config.build.client;
+      },
+      'astro:build:done': async ({ logger }) => {
+        if (!isProductionBuild || !clientDir) return;
+        await rm(new URL('demo/', clientDir), { recursive: true, force: true });
+        logger.info('Removed demo assets (public/demo) from the production output.');
+      },
+    },
+  };
+}
 
 // labels.fyi is a static-first site: every public page is prerendered from
 // Sanity (or the local demo dataset) at build time. A small number of
@@ -89,7 +139,8 @@ export default defineConfig({
       }),
     },
   },
+  integrations: [noDemoAssetsInProduction()],
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), noLocalCredentialsInProductionOutput()],
   },
 });
