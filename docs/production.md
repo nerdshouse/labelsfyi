@@ -117,6 +117,13 @@ The Worker verifies `Cf-Access-Jwt-Assertion` itself (`src/lib/server/access-jwt
 In production, `/internal` answers **503** until Access is configured and **403** without a valid
 token. Basic auth (`REVIEW_USER`/`REVIEW_PASSWORD`) remains the second layer.
 
+**Reviewer entry point: `https://labels.fyi/internal`.** It is an on-demand Worker route
+(`src/pages/internal/index.astro`) that only redirects to `/internal/review`. The redirect runs
+only after the middleware has passed both layers: Cloudflare Access (login, then the verified
+JWT) and then the Basic auth prompt. Without credentials, `/internal` is refused like every other
+internal route. It is never a public 404: `check-dist` requires it in the built route manifest,
+and the live route check fails if it answers 404.
+
 ## 4. GitHub Actions
 
 Repository `nerdshouse/labelsfyi` → Settings → Environments → **production**:

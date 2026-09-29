@@ -1,0 +1,15 @@
+---
+/**
+ * Reviewer entry point: /internal → /internal/review.
+ *
+ * Deliberately no authentication here. This is an on-demand Worker route, so
+ * src/middleware.ts handles it first, exactly like every other /internal/*
+ * route: Cloudflare Access JWT verification (required in production), then
+ * reviewer Basic auth. Only a request that passed both reaches this redirect.
+ * (Before this file existed, /internal matched no route and fell through to
+ * the public 404 page without ever reaching the middleware.)
+ */
+export const prerender = false;
+
+return Astro.redirect('/internal/review', 302);
+---

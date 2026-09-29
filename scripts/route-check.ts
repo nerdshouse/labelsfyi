@@ -43,7 +43,7 @@ function accessTeamDomain(): string | null {
   return vars?.ACCESS_TEAM_DOMAIN || process.env.ACCESS_TEAM_DOMAIN || null;
 }
 
-async function expectInternal(path: string) {
+async function expectInternal(path: string, mustExist = false) {
   const label = `${path} refused without credentials`;
   let r: Response;
   let body: string;
@@ -64,7 +64,13 @@ async function expectInternal(path: string) {
       robotsTag: r.headers.get('x-robots-tag'),
       body,
     },
-    { production, accessTeamDomain: accessTeamDomain() },
+    {
+      production,
+      accessTeamDomain: accessTeamDomain(),
+      mustExist,
+      requestPath: path,
+      origin: new URL(base).origin,
+    },
   );
   if (!verdict.pass) failures.push(label);
   console.log(`${verdict.pass ? 'PASS' : 'FAIL'}  ${label} [${r.status}: ${verdict.reason}]`);
@@ -93,8 +99,27 @@ await expect(
 await expect('/compare/a-vs-b', is(404), '/compare unknown pair → 404');
 await expect('/products/does-not-exist', is(404), 'unknown product → 404');
 // /internal/* without credentials: judged by src/lib/server/route-check-rules.ts
-// (302 to OUR Cloudflare Access login, or a private Worker refusal, or 404).
-for (const p of ['/internal/review', '/%69nternal/review', '/INTERNAL/review', '//internal/review'])
+// (302 to OUR Cloudflare Access login, or a private Worker refusal).
+// /internal is the canonical reviewer entry point: it and the real internal
+// routes MUST exist, so a public 404 (middleware never ran) is a failure.
+for (const p of [
+  '/internal',
+  '/internal/review',
+  '/internal/goals',
+  '/internal/candidates',
+  '/internal/review/export.ndjson',
+  '/internal/review/image/x',
+])
+  await expectInternal(p, true);
+// Variants: may be refused, redirected to Access, canonicalised, or match no
+// route (404) — but never served.
+for (const p of [
+  '/internal/',
+  '/%69nternal/review',
+  '/INTERNAL',
+  '/INTERNAL/review',
+  '//internal/review',
+])
   await expectInternal(p);
 await expect('/api/submissions', (r) => r.status !== 200, 'GET /api/submissions is not a 200');
 await expect('/', (r) => r.headers.get('x-frame-options') === 'DENY', 'X-Frame-Options DENY');

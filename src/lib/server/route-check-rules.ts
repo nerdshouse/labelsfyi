@@ -9,7 +9,12 @@
  *     the configured team domain, path /cdn-cgi/access/login/…
  *   - 401 / 503 (and 403 in production) with the private no-store/noindex
  *     headers the Worker adds to its own refusals
- *   - 404 (no route matched, nothing served)
+ *   - 404 (no route matched, nothing served), EXCEPT for a route that must
+ *     exist (the /internal entry point and the real internal routes): there a
+ *     404 means the request fell through to the public 404 page, bypassing the
+ *     middleware, so it FAILS
+ *   - 301/308 trailing-slash canonicalisation to the same path without the
+ *     slash, on the same host (e.g. /internal/ → /internal)
  * FAIL on anything else, and always when internal content is in the response.
  */
 import { ACCESS_TEAM_DOMAIN_RE } from './deploy-config.ts';
@@ -60,10 +65,40 @@ export function accessLoginRedirectProblem(
   return null;
 }
 
-export function internalRouteVerdict(
-  r: ProbeResponse,
-  opts: { production: boolean; accessTeamDomain: string | null },
-): Verdict {
+export interface InternalProbeOptions {
+  production: boolean;
+  accessTeamDomain: string | null;
+  /** The route is expected to exist: a 404 means it was never protected. */
+  mustExist?: boolean;
+  /** Path that was requested and the origin it was requested from. */
+  requestPath?: string;
+  origin?: string;
+}
+
+/** Null when `location` only drops the trailing slash of `requestPath` on the same host. */
+export function trailingSlashRedirectProblem(
+  location: string | null,
+  requestPath: string | undefined,
+  origin: string | undefined,
+): string | null {
+  if (!location) return 'redirect without a Location header';
+  if (!requestPath || !origin || requestPath === '/' || !requestPath.endsWith('/'))
+    return 'not a trailing-slash request';
+  let base: URL;
+  let url: URL;
+  try {
+    base = new URL(requestPath, origin);
+    url = new URL(location, base);
+  } catch {
+    return 'unparseable Location';
+  }
+  if (url.origin !== base.origin) return `redirect leaves the site (${url.origin})`;
+  if (url.pathname !== base.pathname.replace(/\/+$/, '') || url.search)
+    return `redirect to an unexpected path (${url.pathname})`;
+  return null;
+}
+
+export function internalRouteVerdict(r: ProbeResponse, opts: InternalProbeOptions): Verdict {
   if (exposesInternalContent(r)) return { pass: false, reason: 'internal content is exposed' };
   if (r.status >= 200 && r.status < 300)
     return { pass: false, reason: `publicly accessible (${r.status})` };
@@ -73,7 +108,16 @@ export function internalRouteVerdict(
       ? { pass: false, reason: problem }
       : { pass: true, reason: 'redirected to the Cloudflare Access login' };
   }
-  if (r.status === 404) return { pass: true, reason: 'no route matched (nothing served)' };
+  if (r.status === 301 || r.status === 308) {
+    const problem = trailingSlashRedirectProblem(r.location, opts.requestPath, opts.origin);
+    return problem
+      ? { pass: false, reason: `${r.status}: ${problem}` }
+      : { pass: true, reason: 'trailing-slash redirect to the same protected path' };
+  }
+  if (r.status === 404)
+    return opts.mustExist
+      ? { pass: false, reason: 'public 404: the route is missing, so the middleware never ran' }
+      : { pass: true, reason: 'no route matched (nothing served)' };
   const refusals = opts.production ? [401, 403, 503] : [401, 503];
   if (refusals.includes(r.status)) {
     const privateHeaders = r.cacheControl === 'no-store' && /noindex/.test(r.robotsTag ?? '');

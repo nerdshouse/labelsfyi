@@ -52,6 +52,22 @@ check(
     .every((f) => !/\bsk[A-Za-z0-9]{60,}\b/.test(readFileSync(f, 'utf8'))),
 );
 
+// ── /internal reviewer entry point is a Worker route (both modes) ───────
+// Without it, /internal fell through to the public 404 and never reached the
+// middleware. It must be in the built route manifest and must not be static.
+const serverCode = existsSync(SERVER)
+  ? walk(SERVER)
+      .filter((f) => /\.m?js$/.test(f))
+      .map((f) => readFileSync(f, 'utf8'))
+      .join('\n')
+  : '';
+check(
+  'internal: /internal entry point is an on-demand route in the built manifest',
+  serverCode.includes('"route":"/internal"') &&
+    !existsSync(join(DIST, 'internal.html')) &&
+    !existsSync(join(DIST, 'internal', 'index.html')),
+);
+
 // ── PRODUCTION mode: generic checks only (no fixture expectations) ──────
 if (process.env.DIST_MODE === 'production') {
   const meta = JSON.parse(read('build-meta.json')) as {

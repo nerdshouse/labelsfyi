@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   accessLoginRedirectProblem,
   internalRouteVerdict,
+  trailingSlashRedirectProblem,
   type ProbeResponse,
 } from './route-check-rules';
 
@@ -104,5 +105,78 @@ describe('live route check: /internal without credentials', () => {
     expect(accessLoginRedirectProblem(LOGIN, TEAM)).toBeNull();
     expect(accessLoginRedirectProblem(LOGIN.replace(TEAM, TEAM.toUpperCase()), TEAM)).toBeNull(); // URL host is case-insensitive
     expect(accessLoginRedirectProblem(LOGIN, 'other.cloudflareaccess.com')).not.toBeNull();
+  });
+});
+
+describe('live route check: /internal entry point (must exist)', () => {
+  const entry = {
+    ...prod,
+    mustExist: true,
+    requestPath: '/internal',
+    origin: 'https://labels.fyi',
+  };
+  it('FAIL: a public 404 for /internal (route missing, middleware never ran)', () => {
+    expect(
+      internalRouteVerdict(res({ status: 404, body: "We couldn't find that page." }), entry),
+    ).toMatchObject({ pass: false, reason: expect.stringMatching(/public 404/) });
+  });
+  it('PASS: unauthenticated /internal redirected to the Access login (live)', () => {
+    expect(internalRouteVerdict(redirect(LOGIN), entry).pass).toBe(true);
+  });
+  it('PASS: unauthenticated /internal refused by the Worker (403/503)', () => {
+    for (const status of [403, 503])
+      expect(internalRouteVerdict(refusal(status), entry).pass).toBe(true);
+  });
+  it('FAIL: /internal serving the reviewer UI or its own redirect to an unauthenticated client', () => {
+    expect(
+      internalRouteVerdict(res({ body: '<title>Submissions · labels.fyi internal</title>' }), entry)
+        .pass,
+    ).toBe(false);
+    // The app's own post-auth redirect must never reach an unauthenticated probe.
+    expect(internalRouteVerdict(redirect('/internal/review'), entry).pass).toBe(false);
+    expect(internalRouteVerdict(redirect('https://labels.fyi/internal/review'), entry).pass).toBe(
+      false,
+    );
+  });
+  it('PASS (unchanged): 404 on a variant that need not exist (e.g. /INTERNAL)', () => {
+    expect(
+      internalRouteVerdict(res({ status: 404, body: 'Not found' }), {
+        ...prod,
+        requestPath: '/INTERNAL',
+      }).pass,
+    ).toBe(true);
+  });
+});
+
+describe('live route check: /internal/ trailing slash', () => {
+  const slash = { ...prod, requestPath: '/internal/', origin: 'https://labels.fyi' };
+  const moved = (status: number, location: string | null) => res({ status, location });
+  it('PASS: 301/308 to the same path without the slash, same host', () => {
+    expect(internalRouteVerdict(moved(301, 'https://labels.fyi/internal'), slash).pass).toBe(true);
+    expect(internalRouteVerdict(moved(308, '/internal'), slash).pass).toBe(true);
+  });
+  it('PASS: Access redirect for /internal/ (live)', () => {
+    expect(internalRouteVerdict(redirect(LOGIN), slash).pass).toBe(true);
+  });
+  it.each([
+    ['another host', 'https://evil.example.com/internal'],
+    ['another path', 'https://labels.fyi/internal/review'],
+    ['a query', '/internal?x=1'],
+    ['no Location', null],
+  ])('FAIL: 301 to %s', (_label, location) => {
+    expect(internalRouteVerdict(moved(301, location), slash).pass).toBe(false);
+  });
+  it('FAIL: 301 on a request without a trailing slash', () => {
+    expect(
+      trailingSlashRedirectProblem('/internal', '/internal', 'https://labels.fyi'),
+    ).not.toBeNull();
+  });
+  it('FAIL: trailing-slash redirect whose body leaks internal content', () => {
+    expect(
+      internalRouteVerdict(
+        res({ status: 301, location: '/internal', body: 'Internal · review' }),
+        slash,
+      ).pass,
+    ).toBe(false);
   });
 });
