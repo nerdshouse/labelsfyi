@@ -113,7 +113,9 @@ export function dohResolver(fetchImpl: typeof fetch = fetch): HostResolver {
     try {
       const res = await fetchImpl(`${DOH}?name=${encodeURIComponent(host)}&type=${type}`, {
         headers: { Accept: 'application/dns-json' },
-        redirect: 'error',
+        // 'manual', never 'error' (the Workers runtime throws on it): a redirect
+        // comes back unfollowed (3xx, ok === false) and is rejected below.
+        redirect: 'manual',
         signal: ctl.signal,
       });
       if (!res.ok) throw new Error(`DoH HTTP ${res.status}`);

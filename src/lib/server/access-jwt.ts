@@ -46,7 +46,9 @@ export function normaliseTeamDomain(raw: string): string | null {
 }
 
 const defaultFetcher: JwksFetcher = async (certsUrl) => {
-  const res = await fetch(certsUrl, { redirect: 'error' });
+  // 'manual', never 'error': the Workers runtime throws on redirect:'error'.
+  // A redirect is returned unfollowed (3xx, ok === false) and rejected below.
+  const res = await fetch(certsUrl, { redirect: 'manual' });
   if (!res.ok) throw new Error(`Access certs HTTP ${res.status}`);
   return (await res.json()) as { keys: Jwk[] };
 };
