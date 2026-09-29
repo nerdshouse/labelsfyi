@@ -6,6 +6,18 @@ export class NotConfiguredError extends Error {
 }
 
 /**
+ * Reviewer-facing reason the submission store is unavailable while a write
+ * token is configured. "false" is the deliberate closed state (public
+ * submissions intentionally off); any other value that is not "true" means the
+ * private-dataset prerequisite has not been confirmed.
+ */
+export function submissionsUnavailableMessage(flag: string | undefined): string {
+  return flag === 'false'
+    ? 'Submissions are currently closed.'
+    : 'Submissions require a private Sanity dataset.';
+}
+
+/**
  * Production: Sanity with a server-only write token, and only once the
  * dataset has been confirmed private. Local development: the R2 JSON store.
  * Anything else: not configured (submissions return 503).
@@ -13,9 +25,7 @@ export class NotConfiguredError extends Error {
 export async function getDocStore(env: ServerEnv): Promise<DocStore> {
   if (env.SANITY_WRITE_TOKEN && env.SANITY_PROJECT_ID) {
     if (env.SUBMISSIONS_PRIVATE_DATASET !== 'true') {
-      throw new NotConfiguredError(
-        'Submissions require a private Sanity dataset (SUBMISSIONS_PRIVATE_DATASET=true).',
-      );
+      throw new NotConfiguredError(submissionsUnavailableMessage(env.SUBMISSIONS_PRIVATE_DATASET));
     }
     const { createClient } = await import('@sanity/client');
     const client = createClient({
