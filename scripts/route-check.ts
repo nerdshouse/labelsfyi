@@ -4,10 +4,16 @@
  *
  *   node scripts/route-check.ts http://localhost:4323 [--production]
  *
- * --production additionally expects the production runtime behaviour:
- * /internal answers 503 until Cloudflare Access is configured (or 403 without
- * a valid Access JWT once it is), never 200 without credentials.
+ * --production additionally expects the production runtime behaviour. For
+ * /internal/* without credentials the verdict comes from
+ * src/lib/server/route-check-rules.ts: live, Cloudflare Access answers 302 to
+ * its login page on our team domain (read from dist/server/wrangler.json);
+ * the Worker itself answers 503 until Access is configured and 403 without a
+ * valid Access JWT. Never 200, never internal content.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { internalRouteVerdict } from '../src/lib/server/route-check-rules.ts';
+
 const [base = 'http://localhost:4323', flag] = process.argv.slice(2);
 const production = flag === '--production';
 const failures: string[] = [];
@@ -29,13 +35,45 @@ async function expect(path: string, ok: (r: Response, body: string) => boolean, 
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${label} [${r.status}]`);
 }
 
+/** The Access team domain of the build being checked (dist/server/wrangler.json). */
+function accessTeamDomain(): string | null {
+  const cfg = 'dist/server/wrangler.json';
+  if (!existsSync(cfg)) return process.env.ACCESS_TEAM_DOMAIN ?? null;
+  const vars = (JSON.parse(readFileSync(cfg, 'utf8')) as { vars?: Record<string, string> }).vars;
+  return vars?.ACCESS_TEAM_DOMAIN || process.env.ACCESS_TEAM_DOMAIN || null;
+}
+
+async function expectInternal(path: string) {
+  const label = `${path} refused without credentials`;
+  let r: Response;
+  let body: string;
+  try {
+    r = await fetch(base.replace(/\/$/, '') + path, { redirect: 'manual' });
+    body = await r.text();
+  } catch (e) {
+    failures.push(`${label}: ${(e as Error).message}`);
+    console.log(`FAIL  ${label} (unreachable)`);
+    return;
+  }
+  const verdict = internalRouteVerdict(
+    {
+      status: r.status,
+      location: r.headers.get('location'),
+      contentType: r.headers.get('content-type'),
+      cacheControl: r.headers.get('cache-control'),
+      robotsTag: r.headers.get('x-robots-tag'),
+      body,
+    },
+    { production, accessTeamDomain: accessTeamDomain() },
+  );
+  if (!verdict.pass) failures.push(label);
+  console.log(`${verdict.pass ? 'PASS' : 'FAIL'}  ${label} [${r.status}: ${verdict.reason}]`);
+}
+
 const is =
   (...codes: number[]) =>
   (r: Response) =>
     codes.includes(r.status);
-const privateHeaders = (r: Response) =>
-  r.headers.get('cache-control') === 'no-store' &&
-  /noindex/.test(r.headers.get('x-robots-tag') ?? '');
 
 await expect('/', is(200), 'home 200');
 for (const p of ['/privacy', '/terms', '/contact', '/methodology', '/submit', '/search'])
@@ -54,15 +92,10 @@ await expect(
 );
 await expect('/compare/a-vs-b', is(404), '/compare unknown pair → 404');
 await expect('/products/does-not-exist', is(404), 'unknown product → 404');
+// /internal/* without credentials: judged by src/lib/server/route-check-rules.ts
+// (302 to OUR Cloudflare Access login, or a private Worker refusal, or 404).
 for (const p of ['/internal/review', '/%69nternal/review', '/INTERNAL/review', '//internal/review'])
-  await expect(
-    p,
-    // 404 = no route matched (nothing served); otherwise a private refusal.
-    (r) =>
-      r.status === 404 ||
-      ((production ? [503, 403, 401] : [503, 401]).includes(r.status) && privateHeaders(r)),
-    `${p} refused without credentials`,
-  );
+  await expectInternal(p);
 await expect('/api/submissions', (r) => r.status !== 200, 'GET /api/submissions is not a 200');
 await expect('/', (r) => r.headers.get('x-frame-options') === 'DENY', 'X-Frame-Options DENY');
 await expect('/', (r) => r.headers.get('x-content-type-options') === 'nosniff', 'nosniff');
@@ -72,5 +105,3 @@ if (failures.length) {
   process.exit(1);
 }
 console.log('\nAll route checks passed.');
-
-export {};
