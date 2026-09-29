@@ -63,7 +63,7 @@ beforeAll(async () => {
 
 describe('content graph', () => {
   it('loads every live demo product and resolves relationships', () => {
-    expect(graph.products).toHaveLength(6);
+    expect(graph.products).toHaveLength(11);
     const creatine = graph.ingredients.find((i) => i.slug === 'creatine-monohydrate')!;
     expect(creatine.products.map((p) => p._id).sort()).toEqual([
       'product.sampleworks-creatine',

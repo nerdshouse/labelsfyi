@@ -1,4 +1,6 @@
 import { defineField, defineType } from 'sanity';
+import { MERCHANT_KIND } from '../../lib/constants';
+import { gtinValidation } from '../../lib/gtin';
 import { lockedAfterWindow } from '../../lib/validation';
 
 export const merchant = defineType({
@@ -14,6 +16,19 @@ export const merchant = defineType({
       validation: (r) => r.required(),
     }),
     defineField({ name: 'websiteUrl', type: 'url' }),
+    defineField({
+      name: 'kind',
+      type: 'string',
+      options: { list: MERCHANT_KIND },
+      description: 'Official brand store, marketplace, quick commerce…',
+    }),
+    defineField({
+      name: 'brand',
+      type: 'reference',
+      to: [{ type: 'brand' }],
+      description: 'For an official brand store: whose store it is.',
+      hidden: ({ document }) => document?.kind !== 'OFFICIAL_STORE',
+    }),
   ],
 });
 
@@ -107,6 +122,14 @@ export const priceSnapshot = defineType({
       to: [{ type: 'productReference' }],
     }),
     defineField({ name: 'source', type: 'reference', to: [{ type: 'source' }] }),
+    defineField({
+      readOnly: lockedAfterWindow,
+      name: 'gtin',
+      title: 'Barcode (GTIN)',
+      type: 'string',
+      description: 'Digits only, if the listing shows the barcode.',
+      validation: (r) => r.custom(gtinValidation),
+    }),
     defineField({ name: 'notes', type: 'text', rows: 2 }),
     defineField({ name: 'isDemo', type: 'boolean', initialValue: false }),
   ],
@@ -150,7 +173,13 @@ export const affiliateOffer = defineType({
       validation: (r) => r.required(),
     }),
     defineField({ name: 'destinationUrl', type: 'url', validation: (r) => r.required() }),
-    defineField({ name: 'affiliateUrl', type: 'url' }),
+    defineField({
+      name: 'affiliateUrl',
+      type: 'url',
+      description: 'Tracked outbound URL. Never used as a canonical or source URL.',
+    }),
+    defineField({ name: 'affiliateNetwork', type: 'string' }),
+    defineField({ name: 'trackingId', type: 'string' }),
     defineField({
       name: 'relationship',
       type: 'string',

@@ -1,0 +1,79 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { AFFILIATE_DISCLOSURE } from '@/lib/affiliates';
+import { LEGAL_UPDATED } from '@/lib/seo/legal';
+
+/**
+ * Terms of use. Plain statements of how the site works. No legal entity,
+ * jurisdiction or liability clauses are invented here: those need the
+ * operator's details and a legal review before launch.
+ */
+const crumbs = [{ name: 'Terms', href: '/terms' }];
+---
+
+<BaseLayout
+  title="Terms of use"
+  description="How labels.fyi information may be used, what it is not, submissions, corrections and affiliate links."
+  canonicalPath="/terms"
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <article class="prose-lf mt-6 max-w-2xl" data-legal-page="terms">
+      <h1 class="display">Terms of use</h1>
+      <p class="caption text-ink-3">Last updated {LEGAL_UPDATED}</p>
+
+      <h2>Information, not medical advice</h2>
+      <p>
+        labels.fyi explains what supplement labels state and what published evidence says. It is
+        general information, not a diagnosis, treatment or personal recommendation. Speak to a
+        doctor or registered dietitian about your own health, especially if you are pregnant,
+        breastfeeding or take medication.
+      </p>
+
+      <h2>Accuracy</h2>
+      <p>
+        We record labels as printed and date every observation. Labels and prices change; always
+        check the pack you buy. Prices are dated observations, not live offers. If you find an
+        error, see <a href="/contact#corrections">corrections</a>.
+      </p>
+
+      <h2>Sending a label</h2>
+      <p>By sending photos you confirm that:</p>
+      <ul>
+        <li>you took them, or have the right to share them;</li>
+        <li>they don’t show anyone’s face, prescriptions or personal details;</li>
+        <li>
+          we may use the facts they show (the printed label text and amounts) to create or correct a
+          product page after review.
+        </li>
+      </ul>
+      <p>
+        Your photos themselves are kept private and are not published. Nothing is published until it
+        has been verified. See <a href="/privacy">privacy</a>.
+      </p>
+
+      <h2 id="affiliate">Affiliate links</h2>
+      <p>{AFFILIATE_DISCLOSURE}</p>
+      <p>
+        Commercial links are labelled on the link itself. A retailer relationship never changes a
+        label breakdown, a claim assessment or the order of a comparison. We don’t accept payment
+        for reviews, rankings or placement. More in the{' '}
+        <a href="/methodology#commercial">methodology</a>.
+      </p>
+
+      <h2>Brand names and trademarks</h2>
+      <p>
+        Brand and product names belong to their owners and are used only to identify products.
+        Product images are shown only when the brand has authorised it or when they are our own
+        photos of a pack; otherwise we show a plain text tile.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        <a href="/contact">Contact</a> · <a href="mailto:hello@labels.fyi">hello@labels.fyi</a>
+      </p>
+    </article>
+  </div>
+</BaseLayout>

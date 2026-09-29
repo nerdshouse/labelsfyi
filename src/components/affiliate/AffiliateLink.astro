@@ -10,10 +10,11 @@ import type { AffiliateOfferData } from '@/lib/content/types';
  */
 interface Props {
   offer: AffiliateOfferData;
-  productId: string;
+  /** Public slug only: analytics never receives Sanity document ids. */
+  productSlug: string;
   productName: string;
 }
-const { offer, productId, productName } = Astro.props;
+const { offer, productSlug, productName } = Astro.props;
 const commercial = isCommercial(offer);
 ---
 
@@ -23,7 +24,7 @@ const commercial = isCommercial(offer);
   target="_blank"
   class="btn btn-quiet w-full sm:w-auto"
   data-track="affiliate_click"
-  data-product={productId}
+  data-product={productSlug}
   data-merchant={offer.merchant.slug}
   data-relationship={offer.relationship}
   aria-label={`View ${productName} on ${offer.merchant.name}${commercial ? ' (affiliate link, opens in new tab)' : ' (opens in new tab)'}`}

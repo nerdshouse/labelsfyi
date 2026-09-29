@@ -1,0 +1,83 @@
+---
+import CompareTwoLabels from '@/components/comparison/CompareTwoLabels.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { compareLabels, resolvePair } from '@/lib/comparison/compare-two';
+import { loadLabelFacts } from '@/lib/comparison/facts-source';
+
+/**
+ * /compare/<slug-a>-vs-<slug-b>: resolved on demand from two published
+ * products (no O(n²) prerendered catalogue). Unpublished or unknown slugs
+ * 404 with no product details; B-vs-A redirects to the canonical A-vs-B.
+ */
+export const prerender = false;
+
+const raw = Astro.url.pathname.replace(/^\/compare\//, '').replace(/\/$/, '');
+const resolved = await resolvePair(raw, (slug) => loadLabelFacts(slug, Astro.url));
+if (resolved.kind === 'redirect') return Astro.redirect(resolved.to, 301);
+
+const c = resolved.kind === 'ok' ? compareLabels(resolved.a, resolved.b) : null;
+if (!c) {
+  Astro.response.status = 404;
+  Astro.response.headers.set('Cache-Control', 'no-store');
+  Astro.response.headers.set('X-Robots-Tag', 'noindex');
+} else {
+  // Rebuilt with the site; a short edge cache keeps it cheap.
+  Astro.response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=3600');
+}
+const crumbs = c
+  ? [
+      { name: 'Compare', href: '/compare' },
+      { name: `${c.a.short} vs ${c.b.short}`, href: c.path },
+    ]
+  : [];
+---
+
+{c ? (
+  <BaseLayout
+    title={`${c.a.short} vs ${c.b.short}: label comparison`}
+    description={`What differs between the ${c.a.short} and ${c.b.short} labels: serving, form, compound and elemental amounts, other actives, observed prices and label evidence. Facts only, no scores or rankings.`}
+    canonicalPath={c.path}
+    noindex={c.a.isDemo || c.b.isDemo}
+    crumbs={crumbs}
+  >
+    <div class="page pt-5">
+      <Breadcrumbs items={crumbs} />
+      <header class="mt-6 max-w-3xl">
+        <p class="caption text-ink-3">Compare two labels</p>
+        <h1 class="h1 mt-2">
+          <a href={c.a.href} class="hover:underline">
+            {c.a.name}
+          </a>
+          <span class="text-ink-3"> vs </span>
+          <a href={c.b.href} class="hover:underline">
+            {c.b.name}
+          </a>
+        </h1>
+        <p class="lede mt-4">
+          What differs between these two labels, from what each label declares. Not which is better:
+          labels.fyi does not score or rank products.
+        </p>
+      </header>
+      <div class="mt-10">
+        <CompareTwoLabels c={c} />
+      </div>
+    </div>
+  </BaseLayout>
+) : (
+  <BaseLayout title="Comparison not found" noindex>
+    <div class="page max-w-2xl pt-10">
+      <p class="caption text-ink-3">Compare two labels</p>
+      <h1 class="h1 mt-2">Comparison not found</h1>
+      <p class="lede mt-4">
+        Comparisons are available for two different published products. Check the link, or start
+        from a product page.
+      </p>
+      <p class="mt-6">
+        <a href="/products" class="link">
+          Browse products
+        </a>
+      </p>
+    </div>
+  </BaseLayout>
+)}

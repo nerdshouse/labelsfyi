@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ProvenanceError, parseAmount, suggestMatches, toCandidateDocument } from './candidate';
+import { ProvenanceError, parseAmount, toCandidateDocument } from './candidate';
 import type { ExtractedProduct } from './types';
 
 const extracted = (over: Partial<ExtractedProduct> = {}): ExtractedProduct => ({
@@ -66,14 +66,31 @@ describe('ingestion boundary', () => {
 
   it('suggests matches but never confirms one', () => {
     const products = [
-      { _id: 'product.a', name: 'Magnesium Glycinate 60 tablets', brand: 'Specimen Nutrition' },
-      { _id: 'product.b', name: 'Whey Protein', brand: 'Specimen Nutrition' },
+      { id: 'product.a', name: 'Magnesium Glycinate 60 tablets', brand: 'Specimen Nutrition' },
+      { id: 'product.b', name: 'Whey Protein', brand: 'Specimen Nutrition' },
+      { id: 'product.c', name: 'Magnesium Glycinate 60 tablets', brand: 'Other Brand' },
     ];
     const doc = toCandidateDocument(extracted(), products);
     expect(doc.matchStatus).toBe('possible_match');
-    expect(doc.possibleMatches[0]?.product._ref).toBe('product.a');
+    expect(doc.possibleMatches.map((m) => m.product._ref)).toEqual(['product.a']);
+    expect(doc.possibleMatches[0]).toMatchObject({ level: 'HIGH_CONFIDENCE_CANDIDATE' });
     expect(doc).not.toHaveProperty('resolvedProduct');
-    expect(suggestMatches('Unrelated Omega 3', 'Other Brand', products)).toHaveLength(0);
+  });
+
+  it('carries a normalised GTIN and uses it as the strongest key', () => {
+    const withGtin = extracted({
+      facts: [...extracted().facts, { field: 'gtin', value: '4006381-333931', method: 'parser' }],
+    });
+    const doc = toCandidateDocument(withGtin, [
+      {
+        id: 'product.x',
+        name: 'Totally different name',
+        brand: 'Specimen Nutrition',
+        gtin: '4006381333931',
+      },
+    ]);
+    expect(doc.gtin).toBe('4006381333931');
+    expect(doc.possibleMatches[0]).toMatchObject({ level: 'EXACT', relation: 'same_sku' });
   });
 
   it('parses Indian price and unit formats', () => {

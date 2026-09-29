@@ -6,6 +6,52 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev", "--port", "4321"],
       "port": 4321
+    },
+    {
+      "name": "labels-fyi-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["preview", "--port", "4322"],
+      "port": 4322
+    },
+    {
+      "name": "labels-fyi-rehearsal",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec",
+        "wrangler",
+        "dev",
+        "-c",
+        "dist/server/wrangler.json",
+        "--port",
+        "4323",
+        "--var",
+        "DEPLOY_ENV:production",
+        "--var",
+        "CONTENT_SOURCE:sanity"
+      ],
+      "port": 4323
+    },
+    {
+      "name": "labels-fyi-rehearsal-access",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec",
+        "wrangler",
+        "dev",
+        "-c",
+        "dist/server/wrangler.json",
+        "--port",
+        "4324",
+        "--var",
+        "DEPLOY_ENV:production",
+        "--var",
+        "CONTENT_SOURCE:sanity",
+        "--var",
+        "ACCESS_TEAM_DOMAIN:labelsfyi-rehearsal.cloudflareaccess.com",
+        "--var",
+        "ACCESS_AUD:rehearsal-aud"
+      ],
+      "port": 4324
     }
   ]
 }

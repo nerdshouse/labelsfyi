@@ -1,4 +1,11 @@
 import { parseUnit } from '@/lib/calculations/units';
+import { normalizeGtin } from '@/lib/identity/gtin';
+import {
+  findMatches,
+  type IdentityRecord,
+  type MatchLevel,
+  type MatchRelation,
+} from '@/lib/identity/match';
 import type { CandidateFact, ExtractedFactInput, ExtractedProduct, Provenance } from './types';
 
 /**
@@ -77,80 +84,49 @@ export interface CandidateDocument {
   extractor: string;
   status: 'needs_verification';
   matchStatus: 'unmatched' | 'possible_match';
+  /** Normalised digits when the extracted barcode is a valid GTIN. */
+  gtin: string | null;
   possibleMatches: Array<{
     _key: string;
     _type: 'possibleMatch';
     product: { _type: 'reference'; _ref: string };
-    reason: string;
-    score: number;
+    level: Exclude<MatchLevel, 'NO_MATCH'>;
+    relation: MatchRelation;
+    reasons: string[];
   }>;
   facts: CandidateFact[];
-}
-
-export interface MatchableProduct {
-  _id: string;
-  name: string;
-  brand: string;
-  aliases?: string[];
-}
-
-const tokens = (s: string) =>
-  new Set(
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > 1),
-  );
-
-/**
- * Suggest (never confirm) existing products this extraction may describe.
- * Deliberately simple token overlap; a person decides. Different flavours or
- * formulations are separate products, so a high score is still only a hint.
- */
-export function suggestMatches(
-  title: string,
-  brand: string | undefined,
-  products: MatchableProduct[],
-  threshold = 0.5,
-): CandidateDocument['possibleMatches'] {
-  const want = tokens(`${brand ?? ''} ${title}`);
-  return products
-    .map((p) => {
-      const names = [p.name, ...(p.aliases ?? [])];
-      const score = Math.max(
-        ...names.map((n) => {
-          const have = tokens(`${p.brand} ${n}`);
-          const overlap = [...want].filter((t) => have.has(t)).length;
-          return overlap / Math.max(want.size, have.size);
-        }),
-      );
-      return { p, score };
-    })
-    .filter((m) => m.score >= threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map((m, i) => ({
-      _key: `m${i}`,
-      _type: 'possibleMatch' as const,
-      product: { _type: 'reference' as const, _ref: m.p._id },
-      reason: `Name/brand token overlap ${(m.score * 100).toFixed(0)}%. Confirm variant, pack size and formulation.`,
-      score: Number(m.score.toFixed(2)),
-    }));
 }
 
 /** Build the Sanity document for an extraction. Throws on missing provenance. */
 export function toCandidateDocument(
   extracted: ExtractedProduct,
-  existingProducts: MatchableProduct[] = [],
+  existingProducts: IdentityRecord[] = [],
 ): CandidateDocument {
   assertProvenance(extracted.provenance);
   if (!extracted.extractedAt) throw new ProvenanceError('Missing extractedAt');
   if (!extracted.extractor) throw new ProvenanceError('Missing extractor');
   // fetchedAt is validated above and lives on the snapshot document.
   const { dataSourceId, snapshotId, sourceUrl } = extracted.provenance;
-  const brand = extracted.facts.find((f) => f.field === 'brand')?.value;
-  const possibleMatches = suggestMatches(extracted.title, brand, existingProducts);
+  const factValue = (field: string) =>
+    extracted.facts.find((f) => f.field === field)?.value ?? null;
+  const gtin = normalizeGtin(factValue('gtin'));
+  const identity: IdentityRecord = {
+    id: `candidate:${snapshotId}`,
+    brand: factValue('brand'),
+    name: extracted.title,
+    variant: factValue('variant'),
+    packSize: factValue('pack_size'),
+    gtin: gtin.status === 'valid' ? gtin.digits : null,
+  };
+  const matches = findMatches(identity, existingProducts);
+  const possibleMatches = matches.slice(0, 5).map((m, i) => ({
+    _key: `m${i}`,
+    _type: 'possibleMatch' as const,
+    product: { _type: 'reference' as const, _ref: m.existingId },
+    level: m.level as Exclude<MatchLevel, 'NO_MATCH'>,
+    relation: m.relation,
+    reasons: m.reasons,
+  }));
   return {
     _id: `candidate.${snapshotId.replace(/^snapshot\./, '')}`,
     _type: 'ingestionCandidate',
@@ -162,7 +138,9 @@ export function toCandidateDocument(
     extractedAt: extracted.extractedAt,
     extractor: extracted.extractor,
     status: 'needs_verification',
+    // Suggestions only: a person confirms (or rejects) every match.
     matchStatus: possibleMatches.length ? 'possible_match' : 'unmatched',
+    gtin: gtin.status === 'valid' ? gtin.digits : null,
     possibleMatches,
     facts: extracted.facts.map(normalizeFact),
   };

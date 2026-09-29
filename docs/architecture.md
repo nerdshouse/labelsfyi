@@ -1,5 +1,15 @@
 # Architecture
 
+> **Principles**
+>
+> 1. **Web content is discovery/input. Label evidence and verified observations are the basis for
+>    published product facts.**
+> 2. **More ingredients or a higher dose is not automatically a quality judgment.** labels.fyi exposes
+>    form, amount, transparency, evidence and cost so users can make their own comparisons. No scores,
+>    ranks or "best" lists.
+> 3. **Brand responses are preserved as provenance and clarification, not treated as automatic
+>    editorial approval.**
+
 labels.fyi is a **structured knowledge product** with editorial content layered on top. The data is
 the product; pages are views over it.
 
@@ -15,13 +25,16 @@ src/lib/content  ── repository: bulk queries → resolved content graph
       ├── src/lib/search         index builder + engine abstraction
       ▼
 Astro pages (static HTML) ──► Cloudflare static assets
+                                   +
+Worker (on-demand routes only) ── POST /api/submissions, /internal/review/*
+      │                            (label submissions → private R2 + private Sanity dataset)
 ```
 
 ## Key decisions
 
 | Decision                                               | Why                                                                                                                                                                                                                                                                                                 |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fully static output** (`output: 'static'`)           | Every page is known at build time. Static HTML gives the best Core Web Vitals and zero runtime cost. Sanity publishes trigger a rebuild via webhook.                                                                                                                                                |
+| **Static-first output** + `@astrojs/cloudflare`        | Every public page is prerendered at build time (best Core Web Vitals, zero runtime cost; Sanity publishes trigger a rebuild). Only the submission API and the internal review screen are on-demand (`prerender = false`), served by a Worker that never renders public content.                     |
 | **No database**                                        | Nothing in the MVP needs persistent application data. Newsletter signup and the future brand-response inbox are the first candidates for a store (D1 or Neon) and are documented, not built.                                                                                                        |
 | **No React on the site**                               | The only interactive pieces (search autocomplete, comparison sort, analytics) are small vanilla-TS islands (~9 KB of client JS in total). React is used only inside Sanity Studio.                                                                                                                  |
 | **Studio is a separate workspace package** (`sanity/`) | It keeps React, styled-components and Sanity's Vite out of the site's dependency graph. Deploy it with `sanity deploy` (hosted) or any static host.                                                                                                                                                 |
@@ -94,6 +107,11 @@ intentional.
 None of these paths _requires_ a database to be added up front, and adding one later touches only a
 new Worker plus its writer, not the content model or the pages.
 
+**Render Postgres: intentionally unused (launch decision, 2026-09-29).** A Render Postgres instance
+exists but is not connected. The launch has no Prisma, Drizzle, `pg`, migrations, sync jobs or
+second catalogue database. Sanity is the single source of truth. Revisit only for the
+high-volume cases in the table above, and then as an additive store behind a Worker.
+
 ## Known architectural risks
 
 - **Build-time "now".** Review-due flags, price staleness and offer expiry are computed at build
@@ -123,3 +141,72 @@ External data ingestion is designed but not built. See [ingestion.md](./ingestio
 - **Risk:** Sanity datasets can be public. Before real ingestion, make the dataset private (or keep
   ingestion types in a separate private dataset). Candidates, snapshots and excerpts are internal
   working data, and the site already reads with a server-side token if one is set.
+
+## Comparison & decoder layer
+
+Pure modules, each tested:
+
+| Module                          | Responsibility                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/identity/gtin.ts`      | GTIN-8/12/13/14 normalisation + check digit; `gtinKey` compares GTIN-12/13/14 as equal                                                                                    |
+| `src/lib/identity/serving.ts`   | Structured servings (`count`, `unit`, `mass`, `massUnit`) + parser + formatter                                                                                            |
+| `src/lib/identity/match.ts`     | GTIN-first, brand-gated matching → `EXACT` / `HIGH_CONFIDENCE_CANDIDATE` / `POSSIBLE_MATCH` / `NO_MATCH` plus a relation; never confirms                                  |
+| `src/lib/editorial/evidence.ts` | Label-evidence strength per panel (`strong` / `provisional` / `rejected`); rejected panels are dropped by the repository                                                  |
+| `src/lib/comparison/*`          | Compound vs elemental amounts, derived values (₹/serving, ₹/100 mg elemental, active counts), `searchProducts(graph, query)`, `productDecoder(product)`, discrepancy view |
+
+`searchProducts("magnesium")` returns comparison-ready rows (form, compound, elemental, serving,
+price, ₹/serving, ₹/100 mg elemental, veg, label verification, open discrepancies). Every derived
+value is `null` when an input is missing; compound weight is never used as elemental. Rows are sorted
+by name; ordering by any metric is a presentation choice, not a ranking.
+
+## Label submissions (Sprint 4)
+
+See [submissions.md](./submissions.md). Key decisions:
+
+- **Pure planners, thin routes.** `src/lib/submissions/review.ts` turns (loaded state + reviewer
+  input) into a list of document writes (`WriteOp[]`); routes only load, plan, commit and redirect.
+  The same `steps.ts` functions run in tests against an in-memory store.
+- **One `DocStore` interface, three backends.** Sanity (production; refuses unless the dataset is
+  declared private), R2-backed JSON (local dev only, since workerd has no filesystem) and memory
+  (tests). All evaluate the same GROQ.
+- **Approval gate in the content graph.** Submission-derived panels and observations render only
+  after a later approved editorial review (`gateSubmissionRecords`). This is O(n) in TypeScript: the
+  equivalent nested GROQ was about 20× slower under groq-js.
+- **Photos never become public assets.** They stay in private R2, and the site shows only their
+  classification.
+
+## Compare Two Labels (Sprint 5)
+
+`/compare/<slug-a>-vs-<slug-b>` answers "what differs between these two labels?", never "which is
+better?".
+
+```
+Product graph ─► labelFacts(p) (decoder + derive)  ──build──►  /compare-data/<slug>.json
+                                                                     │ ASSETS binding
+/compare/<a>-vs-<b> (on-demand) ─► resolvePair ─► compareLabels ─► CompareTwoLabels.astro
+```
+
+- **No O(n²) catalogue.** Pair pages are rendered on demand by the Worker. The build emits one
+  small facts file per _published_ product, derived from the same graph as every page, so a file
+  existing means the product is public. The Worker never queries Sanity. In dev the graph is used
+  directly, because dev assets exclude prerendered output.
+- **Canonical URL.** Slugs are sorted (`a < b`), and B-vs-A 301s to A-vs-B. It only redirects when
+  both products exist, so the order can't be used to probe for unpublished slugs. Self-comparisons
+  and unknown or unpublished slugs return 404 with no product data. `/api/compare?a=&b=` is the
+  no-JS selection form.
+- **Presenter** (`src/lib/comparison/compare-two.ts`): pure, and tested over every fixture pair
+  for banned words and false-absence wording.
+  - Missing values stay missing; nothing is converted or inferred.
+  - Compound weights are always named with their form, and elemental amounts always say
+    "elemental".
+  - Absence of a disclosed amount is worded as "No X amount is disclosed for P in the compared
+    label evidence", never "P contains no X".
+- **Sitemap**: only the pairs product pages link to (a product and its up-to-4 related products),
+  deduplicated, so at most 4n entries.
+- **Limitations**:
+  - Actives are aligned by canonical ingredient. Without one, alignment falls back to the printed
+    name with a trailing "(as …)" removed.
+  - Blends and nutrient rows are listed, not diffed row by row.
+  - The Worker renders the site chrome at runtime, so it needs the same `CONTENT_SOURCE` /
+    `SANITY_PROJECT_ID` vars as the build (see deployment.md). Without them, compare pages show the
+    demo banner and are noindexed. That is the safe failure, but still a misconfiguration.

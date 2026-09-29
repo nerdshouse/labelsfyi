@@ -1,0 +1,96 @@
+---
+import { PUBLIC_CF_ANALYTICS_TOKEN, PUBLIC_GA_MEASUREMENT_ID } from 'astro:env/client';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { LEGAL_UPDATED } from '@/lib/seo/legal';
+
+/**
+ * Privacy notice. Describes only what the code actually does (docs/security.md).
+ * It names no legal entity or address: that must come from the operator and a
+ * legal review before launch (docs/production.md, launch blockers).
+ */
+const crumbs = [{ name: 'Privacy', href: '/privacy' }];
+const ga = Boolean(PUBLIC_GA_MEASUREMENT_ID);
+const cfa = Boolean(PUBLIC_CF_ANALYTICS_TOKEN);
+---
+
+<BaseLayout
+  title="Privacy"
+  description="What labels.fyi collects, why, where it is stored and how to ask for it to be deleted."
+  canonicalPath="/privacy"
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <article class="prose-lf mt-6 max-w-2xl" data-legal-page="privacy">
+      <h1 class="display">Privacy</h1>
+      <p class="caption text-ink-3">Last updated {LEGAL_UPDATED}</p>
+
+      <h2>Reading the site</h2>
+      <p>
+        You can read every page without an account. We do not set advertising cookies and do not
+        sell personal data.
+      </p>
+      {(ga || cfa) && (
+        <p>
+          {`We measure how the site is used with ${
+            ga && cfa
+              ? 'Google Analytics and Cloudflare Web Analytics'
+              : ga
+                ? 'Google Analytics'
+                : 'Cloudflare Web Analytics'
+          }.`}{' '}
+          We send page paths without their query strings and a few named events (for example that a
+          comparison was opened or a shop link was clicked, with the product’s public name in the
+          address). We never send what you type into search or the product-link checker, your
+          contact details, or the photos you send.
+          {ga && ' Google Analytics is configured to anonymise IP addresses.'}
+        </p>
+      )}
+      {!ga && !cfa && <p>No analytics service is currently enabled.</p>}
+      <p>
+        Like any website, our hosting provider (Cloudflare) processes technical request data such as
+        IP addresses to deliver pages and to protect the site from abuse, including limiting how
+        often one address can use the forms.
+      </p>
+
+      <h2>Sending a label</h2>
+      <p>
+        When you use <a href="/submit">Submit a supplement</a> we receive:
+      </p>
+      <ul>
+        <li>the label photos you choose to upload;</li>
+        <li>the product details you type (brand, product name, variant, product link);</li>
+        <li>
+          optionally, your name and an email address or phone number, used only if we need to ask
+          about the photos.
+        </li>
+      </ul>
+      <p>
+        Photos and submissions are stored privately (Cloudflare R2 storage and our private content
+        database). They are never public: only our reviewers can see them, after signing in. Your
+        name and contact details are never published and never attached to a product page. Please
+        don’t upload photos showing faces, prescriptions or personal details.
+      </p>
+
+      <h2>Checking a product link</h2>
+      <p>
+        When you paste a product page into the <a href="/analyse">checker</a>, we fetch that page
+        once to read the facts it states. We do not keep the address you typed unless you choose
+        “Submit for verification”, in which case the product facts and the page address are saved
+        privately for review.
+      </p>
+
+      <h2>Deletion and questions</h2>
+      <p>
+        To ask what we hold about you, or to have a submission deleted, email{' '}
+        <a href="mailto:hello@labels.fyi">hello@labels.fyi</a> with the product name and roughly
+        when you sent it.
+      </p>
+      <p>
+        Shop links open the retailer’s site; their own privacy policies apply there. Some are
+        affiliate links (see <a href="/terms#affiliate">affiliate disclosure</a>).
+      </p>
+    </article>
+  </div>
+</BaseLayout>

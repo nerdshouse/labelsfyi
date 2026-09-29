@@ -190,6 +190,19 @@
   .btn-quiet {
     @apply bg-sheet text-ink;
   }
+  /* Filter chip: toggle button, pressed = highlighter. */
+  .chip {
+    @apply inline-flex min-h-9 items-center gap-1.5 rounded-sm border border-ink bg-sheet px-3 text-sm font-medium;
+  }
+  .chip[aria-pressed='true'] {
+    @apply bg-marker;
+  }
+  .chip:disabled {
+    @apply cursor-not-allowed border-line text-ink-3;
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed border-line bg-sheet text-ink-3 shadow-none;
+  }
 
   /* Tag: tiny mono token for metadata (not decoration). */
   .tag {

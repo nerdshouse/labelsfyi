@@ -1,0 +1,49 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+/** Contact routes. Only the addresses the site already uses; no invented details. */
+const crumbs = [{ name: 'Contact', href: '/contact' }];
+---
+
+<BaseLayout
+  title="Contact"
+  description="How to reach labels.fyi: corrections, brand responses, submissions and privacy requests."
+  canonicalPath="/contact"
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <article class="prose-lf mt-6 max-w-2xl" data-legal-page="contact">
+      <h1 class="display">Contact</h1>
+
+      <h2 id="corrections">Corrections</h2>
+      <p>
+        Found an error on a page? Email{' '}
+        <a href="mailto:corrections@labels.fyi">corrections@labels.fyi</a> with the product and,
+        ideally, a clear photo of the current label. Accepted corrections are dated in the page’s
+        update history.
+      </p>
+
+      <h2 id="brands">Brands</h2>
+      <p>
+        Brands can respond with supporting evidence, such as a current label or a certificate of
+        analysis, at <a href="mailto:corrections@labels.fyi">corrections@labels.fyi</a>. To
+        authorise use of your product images or product data, email{' '}
+        <a href="mailto:hello@labels.fyi">hello@labels.fyi</a>; we only use images with written
+        permission.
+      </p>
+
+      <h2>Missing a product?</h2>
+      <p>
+        <a href="/submit">Send us the label</a>. Nothing is published until it is verified.
+      </p>
+
+      <h2>Privacy requests and everything else</h2>
+      <p>
+        <a href="mailto:hello@labels.fyi">hello@labels.fyi</a>. See also{' '}
+        <a href="/privacy">privacy</a> and <a href="/terms">terms</a>.
+      </p>
+    </article>
+  </div>
+</BaseLayout>

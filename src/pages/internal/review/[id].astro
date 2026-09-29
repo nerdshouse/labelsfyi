@@ -1,0 +1,703 @@
+---
+import InternalLayout from '@/layouts/InternalLayout.astro';
+import { SERVING_UNITS } from '@/lib/identity/serving';
+import { serverEnv } from '@/lib/server/env';
+import { isSubmissionId } from '@/lib/submissions/keys';
+import { normalizeGtin } from '@/lib/identity/gtin';
+import { loadReview } from '@/lib/submissions/load';
+import { approvedAfterVerification, FORMATS } from '@/lib/submissions/review';
+import { getDocStore } from '@/lib/submissions/store-factory';
+
+export const prerender = false;
+
+const id = Astro.params.id ?? '';
+if (!isSubmissionId(id)) return new Response('Not found', { status: 404 });
+const store = await getDocStore(await serverEnv());
+const lookupRaw = (Astro.url.searchParams.get('gtin') ?? '').slice(0, 40);
+const lookup = lookupRaw ? normalizeGtin(lookupRaw) : null;
+const lookupGtin = lookup?.status === 'valid' ? lookup.digits : null;
+const d = await loadReview(store, id, lookupGtin);
+if (!d) return new Response('Not found', { status: 404 });
+
+const s = d.submission;
+const img = (key: string) => `/internal/review/image/${key}`;
+const matched = Boolean(s.product);
+const canDecide = !matched && (s.status === 'NEEDS_REVIEW' || s.status === 'RECEIVED');
+const canReviewFacts = matched && s.status === 'IN_REVIEW' && d.candidate?.status !== 'accepted';
+const existingProduct = d.candidate?.matchStatus === 'confirmed';
+const factsImage = s.images.find((i) => i.role === 'facts');
+const allReady = d.checks.every((c) => c.ok);
+const date = (v: string | null | undefined) =>
+  v
+    ? new Date(v).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : '—';
+const MASS = ['mg', 'mcg', 'g', 'IU', 'CFU', 'ml', 'kg'];
+const allForms = [...new Set(d.ingredients.flatMap((i) => i.forms))].sort();
+const isDev = import.meta.env.DEV && store.kind === 'local-r2';
+const productLive = ['PUBLISHED', 'NEEDS_REVIEW'].includes(String(d.product?.workflowStatus));
+const approved = approvedAfterVerification({
+  submission: s,
+  candidate: d.candidate,
+  product: d.product,
+  packObservations: d.packObservations,
+  currentPanels: d.currentPanels,
+  reviews: d.reviews,
+});
+const proposed = d.candidate?.proposedProductChanges as Record<string, unknown> | null | undefined;
+const pending = proposed && !d.candidate?.proposedChangesAppliedAt;
+---
+
+<InternalLayout title={`${s.brand} · ${s.productName}`}>
+  <p class="caption">
+    <a href="/internal/review" class="link">
+      ← All submissions
+    </a>
+  </p>
+  <div class="mt-3 flex flex-wrap items-baseline justify-between gap-3">
+    <h1 class="h2">
+      {s.brand} · {s.productName}
+      {s.variant && <span class="text-ink-3"> · {s.variant}</span>}
+    </h1>
+    <span class="tag tag-ink">{s.status}</span>
+  </div>
+
+  <!-- 1. Submission -->
+  <section class="mt-6 grid gap-6 lg:grid-cols-[1fr_22rem]">
+    <div>
+      <h2 class="caption rule-heavy pt-2 text-ink-3">Submitted photos</h2>
+      <ul class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {s.images.map((i) => (
+          <li class="border border-ink bg-sheet">
+            <a href={img(i.storageKey)} target="_blank" rel="noopener">
+              <img
+                src={img(i.storageKey)}
+                alt={`Submitted ${i.role} photo`}
+                class="aspect-square w-full object-contain"
+                loading="lazy"
+              />
+            </a>
+            <p class="caption px-2 py-1">
+              {i.role} · {i.imageKind} · {i.depictsExactProduct}
+            </p>
+            <p class="num px-2 pb-2 font-mono text-[0.65rem] text-ink-3">
+              {Math.round(i.bytes / 1024)} KB · sha256 {i.sha256.slice(0, 12)}…
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+    <dl class="text-sm">
+      <h2 class="caption rule-heavy pt-2 text-ink-3">Submission</h2>
+      {[
+        ['Reference', s._id],
+        ['Submitted (IST)', date(s.submittedAt)],
+        ['Brand (as typed)', s.brand],
+        ['Product (as typed)', s.productName],
+        ['Variant (as typed)', s.variant ?? '—'],
+        ['Update of product', s.updateOfProduct ?? '—'],
+      ].map(([k, v]) => (
+        <div class="grid grid-cols-[9rem_1fr] border-b border-line py-1.5">
+          <dt class="text-ink-3">{k}</dt>
+          <dd class="break-words">{v}</dd>
+        </div>
+      ))}
+      <div class="grid grid-cols-[9rem_1fr] border-b border-line py-1.5">
+        <dt class="text-ink-3">Product URL</dt>
+        <dd class="break-all">
+          {s.productUrl ? (
+            <a href={s.productUrl} rel="noopener noreferrer nofollow" target="_blank" class="link">
+              {s.productUrl}
+            </a>
+          ) : (
+            '—'
+          )}
+        </dd>
+      </div>
+      <div class="mt-3 border border-dashed border-ink-3 p-2">
+        <p class="caption text-ink-3">Private · never published</p>
+        <p class="mt-1">Name: {s.submitterName ?? '—'}</p>
+        <p>Contact: {s.submitterContact ?? '—'}</p>
+      </div>
+    </dl>
+  </section>
+
+  <!-- 2. Matching -->
+  <section class="mt-10">
+    <h2 class="section-head pb-1">
+      <span class="h3">Match the product</span>
+    </h2>
+    {d.candidate?.resolvedProduct ? (
+      <p class="mt-3 text-sm">
+        Linked to <strong>{String(d.product?.name ?? '')}</strong> (
+        {String(d.candidate.matchStatus)}) by {String(d.candidate.reviewedBy)}. GTIN:{' '}
+        <span class="font-mono">{String(d.candidate.gtin ?? 'Not observed')}</span>
+      </p>
+    ) : (
+      <>
+        <p class="mt-3 text-sm text-ink-2">
+          Suggestions use exact GTIN first, then brand as a hard gate, then the normalised core
+          product name. They are never confirmed automatically.
+        </p>
+        <form method="get" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <label for="gtin-lookup">Barcode on the photos:</label>
+          <input
+            id="gtin-lookup"
+            name="gtin"
+            value={lookupRaw}
+            inputmode="numeric"
+            class="h-9 border border-ink bg-paper px-2 font-mono"
+          />
+          <button class="btn btn-quiet">Look up GTIN</button>
+          {lookup && (
+            <span data-gtin-status class:list={[lookup.status !== 'valid' && 'text-alert']}>
+              {lookup.status === 'valid'
+                ? `Valid ${lookup.kind}: ${lookup.digits}`
+                : lookup.status === 'invalid_check_digit'
+                  ? 'Check digit does not match. Re-read the barcode.'
+                  : 'Not a GTIN-8/12/13/14.'}
+            </span>
+          )}
+        </form>
+        <table class="facts mt-3 text-sm">
+          <thead>
+            <tr>
+              <th>Existing product</th>
+              <th>Level</th>
+              <th>Relation</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.suggestions.length === 0 && (
+              <tr>
+                <td colspan="4" class="text-ink-3">
+                  No existing product matches this brand and name.
+                </td>
+              </tr>
+            )}
+            {d.suggestions.map((m) => (
+              <tr>
+                <td>
+                  {m.brand} · {m.name}
+                </td>
+                <td>
+                  <span class="tag">{m.level}</span>
+                </td>
+                <td>{m.relation}</td>
+                <td class="text-xs">{m.reasons.join('; ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )}
+
+    {canDecide && (
+      <div class="mt-5 grid gap-5 lg:grid-cols-3">
+        <form
+          method="post"
+          action={`/internal/review/${id}/decide`}
+          class="space-y-2 border-2 border-ink bg-sheet p-3 text-sm"
+        >
+          <input type="hidden" name="action" value="accept" />
+          <p class="font-semibold">Accept existing product</p>
+          <select name="productId" required class="h-9 w-full border border-ink bg-paper px-2">
+            <option value="">Choose…</option>
+            {d.suggestions.map((m) => (
+              <option value={m.existingId}>
+                ★ {m.brand} · {m.name} ({m.level})
+              </option>
+            ))}
+            {d.products.map((p) => (
+              <option value={p._id}>
+                {p.brand} · {p.name}
+                {p.variant ? ` · ${p.variant}` : ''}
+              </option>
+            ))}
+          </select>
+          <fieldset class="space-y-1">
+            <legend class="caption text-ink-3">GTIN (from the barcode photo)</legend>
+            <input
+              name="gtin"
+              inputmode="numeric"
+              value={lookupGtin ?? ''}
+              placeholder="Digits from the barcode"
+              class="h-9 w-full border border-ink bg-paper px-2 font-mono"
+            />
+            <label class="flex gap-2">
+              <input type="checkbox" name="gtinNotObserved" /> Not observed on the label
+            </label>
+          </fieldset>
+          <input
+            name="reviewer"
+            required
+            placeholder="Your name"
+            class="h-9 w-full border border-ink bg-paper px-2"
+          />
+          <button class="btn btn-primary w-full">Accept existing product</button>
+        </form>
+
+        <form
+          method="post"
+          action={`/internal/review/${id}/decide`}
+          class="space-y-2 border-2 border-ink bg-sheet p-3 text-sm"
+        >
+          <input type="hidden" name="action" value="create" />
+          <p class="font-semibold">Create new product</p>
+          <input
+            name="name"
+            required
+            value={s.productName}
+            class="h-9 w-full border border-ink bg-paper px-2"
+            aria-label="Product name"
+          />
+          <input
+            name="variant"
+            value={s.variant ?? ''}
+            placeholder="Variant / flavour"
+            class="h-9 w-full border border-ink bg-paper px-2"
+          />
+          <select name="brandId" class="h-9 w-full border border-ink bg-paper px-2">
+            <option value="">New brand (below)</option>
+            {d.brands.map((b) => (
+              <option value={b._id}>{b.name}</option>
+            ))}
+          </select>
+          <input
+            name="newBrandName"
+            value={s.brand}
+            placeholder="New brand name"
+            class="h-9 w-full border border-ink bg-paper px-2"
+          />
+          <select name="categoryId" required class="h-9 w-full border border-ink bg-paper px-2">
+            <option value="">Category…</option>
+            {d.categories.map((c) => (
+              <option value={c._id}>{c.name}</option>
+            ))}
+          </select>
+          <select name="format" required class="h-9 w-full border border-ink bg-paper px-2">
+            <option value="">Format…</option>
+            {FORMATS.map((f) => (
+              <option value={f}>{f}</option>
+            ))}
+          </select>
+          <fieldset class="space-y-1">
+            <legend class="caption text-ink-3">GTIN (from the barcode photo)</legend>
+            <input
+              name="gtin"
+              inputmode="numeric"
+              value={lookupGtin ?? ''}
+              class="h-9 w-full border border-ink bg-paper px-2 font-mono"
+            />
+            <label class="flex gap-2">
+              <input type="checkbox" name="gtinNotObserved" /> Not observed on the label
+            </label>
+          </fieldset>
+          <input
+            name="reviewer"
+            required
+            placeholder="Your name"
+            class="h-9 w-full border border-ink bg-paper px-2"
+          />
+          <button class="btn btn-primary w-full">Create new product</button>
+        </form>
+
+        <form
+          method="post"
+          action={`/internal/review/${id}/decide`}
+          class="space-y-2 border-2 border-ink bg-sheet p-3 text-sm"
+        >
+          <input type="hidden" name="action" value="reject" />
+          <p class="font-semibold">Reject submission</p>
+          <textarea
+            name="reason"
+            required
+            rows="4"
+            placeholder="e.g. Facts panel not legible; not a supplement"
+            class="w-full border border-ink bg-paper p-2"
+          ></textarea>
+          <input
+            name="reviewer"
+            required
+            placeholder="Your name"
+            class="h-9 w-full border border-ink bg-paper px-2"
+          />
+          <button class="btn btn-quiet w-full">Reject</button>
+        </form>
+      </div>
+    )}
+  </section>
+
+  <!-- 3. Fact review -->
+  {canReviewFacts && (
+    <section class="mt-10">
+      <h2 class="section-head pb-1">
+        <span class="h3">Verify the label facts</span>
+      </h2>
+      <p class="mt-2 max-w-3xl text-sm text-ink-2">
+        Record only what the photo shows. <strong>Verified</strong>: readable on the label.{' '}
+        <strong>Missing</strong>: the label does not show it. <strong>Unclear</strong>: can't be
+        read (blocks sending to editorial review). Compound and elemental amounts are separate:
+        never enter a compound weight as elemental.
+      </p>
+      <form
+        method="post"
+        action={`/internal/review/${id}/facts`}
+        class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
+      >
+        <div class="lg:sticky lg:top-4 lg:self-start">
+          {factsImage && (
+            <img
+              src={img(factsImage.storageKey)}
+              alt="Submitted facts panel photo"
+              class="w-full border-2 border-ink bg-sheet object-contain"
+            />
+          )}
+          <p class="caption mt-2 text-ink-3">
+            Facts panel photo (click thumbnails above for full size)
+          </p>
+        </div>
+        <div class="space-y-6 text-sm">
+          <fieldset class="border border-ink bg-sheet p-3">
+            <legend class="caption px-1">1 · Photos: what does each show?</legend>
+            {s.images.map((i) => (
+              <div class="grid grid-cols-[4rem_1fr] items-center gap-3 border-b border-line py-2">
+                <img
+                  src={img(i.storageKey)}
+                  alt=""
+                  class="aspect-square w-16 border border-ink object-cover"
+                />
+                <div class="space-y-1">
+                  <p class="caption">{i.role}</p>
+                  <select name={`img_${i._key}_kind`} class="h-8 border border-ink bg-paper px-1">
+                    {[
+                      'PACK_PHOTO',
+                      'PRINT_ARTWORK',
+                      'MARKETING_GRAPHIC',
+                      'RETYPESET_TABLE',
+                      'UNKNOWN',
+                    ].map((k) => (
+                      <option selected={k === i.imageKind}>{k}</option>
+                    ))}
+                  </select>
+                  <div class="flex flex-wrap gap-3">
+                    {['CONFIRMED', 'UNCONFIRMED', 'NOT_THIS_PRODUCT'].map((v) => (
+                      <label class="flex gap-1">
+                        <input
+                          type="radio"
+                          name={`img_${i._key}_depicts`}
+                          value={v}
+                          checked={v === i.depictsExactProduct}
+                        />{' '}
+                        {v === 'CONFIRMED'
+                          ? 'Shows this exact product'
+                          : v === 'UNCONFIRMED'
+                            ? 'Not sure'
+                            : 'Not this product'}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <label class="mt-2 block">
+              Facts were read from:
+              <select name="factsImageKey" class="ml-2 h-8 border border-ink bg-paper px-1">
+                {s.images.map((i) => (
+                  <option value={i._key} selected={i.role === 'facts'}>
+                    {i.role} photo
+                  </option>
+                ))}
+              </select>
+            </label>
+            {existingProduct && (
+              <fieldset class="mt-2">
+                <legend class="caption text-ink-3">
+                  Compared with the current published label
+                </legend>
+                <label class="mr-4">
+                  <input type="radio" name="labelVersion" value="unchanged" checked /> Same label
+                  (add observations only)
+                </label>
+                <label>
+                  <input type="radio" name="labelVersion" value="new" /> New label version
+                  (supersede, keep history)
+                </label>
+              </fieldset>
+            )}
+          </fieldset>
+
+          <fieldset class="border border-ink bg-sheet p-3">
+            <legend class="caption px-1">2 · Serving</legend>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <select name="serving_status" class="h-9 border border-ink bg-paper px-1">
+                <option>VERIFIED</option>
+                <option>MISSING</option>
+                <option>UNCLEAR</option>
+              </select>
+              <input
+                name="serving_count"
+                inputmode="decimal"
+                placeholder="Quantity"
+                class="h-9 border border-ink bg-paper px-2 font-mono"
+              />
+              <select name="serving_unit" class="h-9 border border-ink bg-paper px-1">
+                <option value="">Unit…</option>
+                {SERVING_UNITS.map((u) => (
+                  <option>{u}</option>
+                ))}
+              </select>
+              <input
+                name="serving_mass"
+                inputmode="decimal"
+                placeholder="Weight (opt.)"
+                class="h-9 border border-ink bg-paper px-2 font-mono"
+              />
+              <select name="serving_massUnit" class="h-9 border border-ink bg-paper px-1">
+                <option value="">—</option>
+                <option>g</option>
+                <option>mg</option>
+                <option>ml</option>
+              </select>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <label>
+                Servings per pack{' '}
+                <select name="servings_status" class="ml-1 h-8 border border-ink bg-paper px-1">
+                  <option>VERIFIED</option>
+                  <option>MISSING</option>
+                  <option>UNCLEAR</option>
+                </select>
+              </label>
+              <input
+                name="servings_value"
+                inputmode="numeric"
+                placeholder="e.g. 30"
+                class="h-8 border border-ink bg-paper px-2 font-mono"
+              />
+            </div>
+          </fieldset>
+
+          <fieldset class="border border-ink bg-sheet p-3">
+            <legend class="caption px-1">3 · Actives (one row per ingredient as printed)</legend>
+            <datalist id="forms">
+              {allForms.map((f) => (
+                <option value={f} />
+              ))}
+            </datalist>
+            {[0, 1, 2, 3].map((n) => (
+              <div class="space-y-2 border-b border-line py-3">
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <input
+                    name={`active_${n}_name`}
+                    placeholder="Name as printed"
+                    class="h-9 border border-ink bg-paper px-2"
+                  />
+                  <select
+                    name={`active_${n}_ingredient`}
+                    class="h-9 border border-ink bg-paper px-1"
+                  >
+                    <option value="">Canonical ingredient…</option>
+                    {d.ingredients.map((i) => (
+                      <option value={i._id}>{i.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    name={`active_${n}_form`}
+                    list="forms"
+                    placeholder="Form (e.g. magnesium bisglycinate)"
+                    class="h-9 border border-ink bg-paper px-2"
+                  />
+                </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <div class="grid grid-cols-[auto_1fr_auto] gap-1">
+                    <span class="caption self-center">Compound</span>
+                    <input
+                      name={`active_${n}_compound_amount`}
+                      inputmode="decimal"
+                      placeholder="Amount"
+                      class="h-9 border border-ink bg-paper px-2 font-mono"
+                    />
+                    <select
+                      name={`active_${n}_compound_unit`}
+                      class="h-9 border border-ink bg-paper px-1"
+                    >
+                      {MASS.map((u) => (
+                        <option>{u}</option>
+                      ))}
+                    </select>
+                    <select
+                      name={`active_${n}_compound_status`}
+                      class="col-span-3 h-8 border border-ink bg-paper px-1"
+                    >
+                      <option>VERIFIED</option>
+                      <option>MISSING</option>
+                      <option>UNCLEAR</option>
+                    </select>
+                  </div>
+                  <div class="grid grid-cols-[auto_1fr_auto] gap-1">
+                    <span class="caption self-center">Elemental</span>
+                    <input
+                      name={`active_${n}_elemental_amount`}
+                      inputmode="decimal"
+                      placeholder="Only if declared"
+                      class="h-9 border border-ink bg-paper px-2 font-mono"
+                    />
+                    <select
+                      name={`active_${n}_elemental_unit`}
+                      class="h-9 border border-ink bg-paper px-1"
+                    >
+                      {MASS.map((u) => (
+                        <option>{u}</option>
+                      ))}
+                    </select>
+                    <select
+                      name={`active_${n}_elemental_status`}
+                      class="col-span-3 h-8 border border-ink bg-paper px-1"
+                    >
+                      <option value="MISSING">MISSING (not declared)</option>
+                      <option>VERIFIED</option>
+                      <option>UNCLEAR</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <input
+                    name={`active_${n}_locator`}
+                    placeholder="Where on the label (e.g. facts panel, row 1)"
+                    class="h-9 border border-ink bg-paper px-2"
+                  />
+                  <input
+                    name={`active_${n}_notes`}
+                    placeholder="Transcription note (optional)"
+                    class="h-9 border border-ink bg-paper px-2"
+                  />
+                </div>
+              </div>
+            ))}
+          </fieldset>
+
+          <fieldset class="border border-ink bg-sheet p-3">
+            <legend class="caption px-1">4 · Front of pack & veg mark</legend>
+            <div class="grid gap-2 sm:grid-cols-[auto_1fr]">
+              <select name="front_status" class="h-9 border border-ink bg-paper px-1">
+                <option value="NOT_REVIEWED">Not reviewed</option>
+                <option>VERIFIED</option>
+                <option>MISSING</option>
+                <option>UNCLEAR</option>
+              </select>
+              <input
+                name="front_text"
+                placeholder="Headline figure exactly as printed (verbatim)"
+                class="h-9 border border-ink bg-paper px-2"
+              />
+              <select name="veg_status" class="h-9 border border-ink bg-paper px-1">
+                <option value="NOT_REVIEWED">Not reviewed</option>
+                <option>VERIFIED</option>
+                <option>MISSING</option>
+                <option>UNCLEAR</option>
+              </select>
+              <select name="veg_value" class="h-9 border border-ink bg-paper px-1">
+                <option value="">Veg status on label…</option>
+                <option value="VEGETARIAN">Green vegetarian mark</option>
+                <option value="NON_VEGETARIAN">Brown non-vegetarian mark</option>
+                <option value="VEGAN">Vegan statement</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <input
+              name="reviewer"
+              required
+              placeholder="Your name"
+              class="h-10 border border-ink bg-paper px-2"
+            />
+            <button class="btn btn-primary">Record verified facts</button>
+          </div>
+        </div>
+      </form>
+    </section>
+  )}
+
+  <!-- 4. Readiness -->
+  {matched && (
+    <section class="mt-10">
+      <h2 class="section-head pb-1">
+        <span class="h3">Ready for editorial review?</span>
+      </h2>
+      <ul class="mt-3 text-sm">
+        {d.checks.map((c) => (
+          <li class="flex gap-2 border-b border-line py-1.5">
+            <span class="font-mono">{c.ok ? '✓' : '·'}</span>
+            <span class:list={[!c.ok && 'text-ink-3']}>
+              {c.label}
+              {c.detail && ` (${c.detail})`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {s.status === 'IN_REVIEW' && (
+        <form method="post" action={`/internal/review/${id}/workflow`} class="mt-3">
+          <button class="btn btn-primary" disabled={!allReady}>
+            Send to editorial review (Fact check)
+          </button>
+          <p class="mt-1 text-xs text-ink-3">
+            This does not publish. Publishing happens in Sanity Studio after fact check and
+            dietitian review.
+          </p>
+        </form>
+      )}
+      {s.status === 'VERIFIED' && (
+        <div class="mt-6 border-2 border-ink bg-sheet p-3 text-sm" data-release>
+          <p class="font-semibold">Release</p>
+          <p class="mt-1 text-ink-2">
+            Submitted facts stay off the site until a named reviewer approves this product in Studio
+            after the facts were verified.
+          </p>
+          <ul class="mt-2">
+            <li>
+              <span class="font-mono">{productLive ? '✓' : '·'}</span> Product published in Studio (
+              {String(d.product?.workflowStatus)})
+            </li>
+            <li>
+              <span class="font-mono">{approved ? '✓' : '·'}</span> Approved editorial review dated
+              after verification
+            </li>
+          </ul>
+          {pending && (
+            <p class="mt-2 text-xs text-ink-3">
+              On release, the product’s current fields are updated to match the new label:{' '}
+              {Object.keys(proposed)
+                .filter((k) => proposed[k] !== undefined)
+                .join(', ')}
+              .
+            </p>
+          )}
+          <form method="post" action={`/internal/review/${id}/release`} class="mt-3">
+            <button class="btn btn-primary" disabled={!(productLive && approved)}>
+              Mark as published
+            </button>
+          </form>
+        </div>
+      )}
+      {isDev && s.status === 'VERIFIED' && (
+        <form
+          method="post"
+          action={`/internal/review/${id}/dev-publish`}
+          class="mt-4 border border-dashed border-alert p-3 text-sm"
+        >
+          <p>
+            <strong>Local development only.</strong> Simulate the Studio review + publish step with
+            the placeholder reviewer.
+          </p>
+          <button class="btn btn-quiet mt-2">Simulate editorial publish (local)</button>
+        </form>
+      )}
+    </section>
+  )}
+</InternalLayout>

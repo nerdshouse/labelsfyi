@@ -10,6 +10,17 @@ import { routes } from '@/lib/seo/site';
 export function buildSearchIndex(graph: ContentGraph): SearchDocument[] {
   const docs: SearchDocument[] = [];
 
+  // Published goals (discovery categories, not medical conditions).
+  for (const g of graph.goals) {
+    docs.push({
+      id: g._id,
+      type: 'goal',
+      title: g.name,
+      subtitle: `Goal · ${g.memberships.length} product${g.memberships.length === 1 ? '' : 's'} marketed for ${g.name.toLowerCase()} support`,
+      url: `/${g.slug}`,
+      keywords: [g.name, g.slug.replace(/-/g, ' '), g.name.replace(/&/g, ' ').replace(/\s+/g, ' ')],
+    });
+  }
   for (const p of graph.products) {
     docs.push({
       id: p._id,

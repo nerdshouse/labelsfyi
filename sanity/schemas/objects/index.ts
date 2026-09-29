@@ -1,5 +1,13 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
-import { ASSESSMENT_STATUS, NUTRIENT_KEYS, UNITS } from '../../lib/constants';
+import {
+  ASSESSMENT_STATUS,
+  ELEMENTAL_BASIS,
+  NUTRIENT_KEYS,
+  SERVING_UNIT,
+  SOURCE_KIND,
+  UNITS,
+  IMAGE_PROVENANCE,
+} from '../../lib/constants';
 
 export const quantity = defineType({
   name: 'quantity',
@@ -31,6 +39,33 @@ export const imageWithAlt = defineType({
       validation: (r) => r.required(),
     }),
     defineField({ name: 'caption', type: 'string' }),
+    defineField({
+      name: 'provenance',
+      type: 'object',
+      description:
+        'Required for product images. Only AUTHORIZED (with a linked permission) and EDITORIAL_LABEL_PHOTO images are displayed; everything else renders a neutral product tile.',
+      fields: [
+        defineField({
+          name: 'status',
+          type: 'string',
+          options: { list: IMAGE_PROVENANCE },
+          initialValue: 'UNKNOWN',
+        }),
+        defineField({
+          name: 'permission',
+          type: 'reference',
+          to: [{ type: 'assetPermission' }],
+          hidden: ({ parent }) => (parent as { status?: string })?.status !== 'AUTHORIZED',
+          validation: (r) =>
+            r.custom((v, ctx) =>
+              (ctx.parent as { status?: string })?.status === 'AUTHORIZED' && !v
+                ? 'Link the asset permission that authorizes this image.'
+                : true,
+            ),
+        }),
+        defineField({ name: 'source', type: 'string', description: 'Who supplied / took it.' }),
+      ],
+    }),
   ],
 });
 
@@ -127,6 +162,8 @@ export const labelIngredient = defineType({
   name: 'labelIngredient',
   title: 'Ingredient row',
   type: 'object',
+  validation: (r) =>
+    r.custom((v) => labelIngredientRules(v as Record<string, unknown> | undefined)),
   description:
     'One ingredient as it appears on the label. Many rows have no amount: leave amounts empty rather than guessing.',
   fields: [
@@ -200,6 +237,42 @@ export const labelIngredient = defineType({
       description:
         'Layer C: what the printed amount means, e.g. "This is the weight of magnesium glycinate, not elemental magnesium." Shown to readers as a labels.fyi note. Needs review like any editorial text.',
     }),
+    defineField({
+      name: 'form',
+      title: 'Ingredient form',
+      type: 'string',
+      description:
+        'As declared, e.g. "Magnesium bisglycinate". Use a form name listed on the linked ingredient where possible.',
+    }),
+    defineField({
+      name: 'compoundAmount',
+      title: 'Compound amount per serving',
+      type: 'number',
+      description: 'Weight of the named compound/form, e.g. 1000 (mg of magnesium bisglycinate).',
+    }),
+    defineField({ name: 'compoundUnit', type: 'string', options: { list: UNITS } }),
+    defineField({
+      name: 'elementalAmount',
+      title: 'Elemental amount per serving',
+      type: 'number',
+      description:
+        'Only if the label declares it, or an editorial calculation with a cited basis. Otherwise leave empty (UNKNOWN). Never copy the compound weight here.',
+    }),
+    defineField({ name: 'elementalUnit', type: 'string', options: { list: UNITS } }),
+    defineField({ name: 'elementalBasis', type: 'string', options: { list: ELEMENTAL_BASIS } }),
+    defineField({
+      name: 'elementalSource',
+      title: 'Basis for elemental calculation',
+      type: 'reference',
+      to: [{ type: 'source' }],
+      hidden: ({ parent }) =>
+        (parent as { elementalBasis?: string })?.elementalBasis !== 'editorial_calculation',
+    }),
+    defineField({
+      name: 'sourceLocator',
+      type: 'string',
+      description: 'e.g. "Supplement facts, row 2".',
+    }),
   ],
   preview: {
     select: {
@@ -214,6 +287,17 @@ export const labelIngredient = defineType({
     }),
   },
 });
+
+export const labelIngredientRules = (row: Record<string, unknown> | undefined) => {
+  if (!row) return true;
+  if (row.compoundAmount != null && !row.compoundUnit)
+    return 'Give a unit for the compound amount.';
+  if (row.elementalAmount != null && (!row.elementalUnit || !row.elementalBasis))
+    return 'Elemental amounts need a unit and a basis (label-declared or cited calculation).';
+  if (row.elementalBasis === 'editorial_calculation' && !row.elementalSource)
+    return 'Cite the basis for the elemental calculation.';
+  return true;
+};
 
 export const evidence = defineType({
   name: 'evidence',
@@ -347,7 +431,76 @@ export const doseBasis = defineType({
   ],
 });
 
+/** "2 capsules", "1 scoop (35.5 g)": stored as fields, displayed from fields. */
+export const servingSpec = defineType({
+  name: 'servingSpec',
+  title: 'Serving',
+  type: 'object',
+  options: { columns: 2 },
+  fields: [
+    defineField({ name: 'count', type: 'number', validation: (r) => r.required().positive() }),
+    defineField({
+      name: 'unit',
+      type: 'string',
+      options: { list: SERVING_UNIT },
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'mass',
+      title: 'Weight / volume per serving',
+      type: 'number',
+      validation: (r) => r.positive(),
+    }),
+    defineField({ name: 'massUnit', type: 'string', options: { list: ['g', 'mg', 'ml'] } }),
+  ],
+  validation: (r) =>
+    r.custom((v) => {
+      const s = v as { mass?: number; massUnit?: string } | undefined;
+      return s?.mass != null && !s.massUnit ? 'Give a unit for the serving weight.' : true;
+    }),
+});
+
+/** One source's value in a discrepancy. Original values are preserved, never overwritten. */
+export const discrepancyValue = defineType({
+  name: 'discrepancyValue',
+  title: 'Source value',
+  type: 'object',
+  fields: [
+    defineField({
+      name: 'sourceType',
+      type: 'string',
+      options: { list: SOURCE_KIND },
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'value',
+      title: 'Value as this source states it',
+      type: 'string',
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'locator',
+      type: 'string',
+      description: 'e.g. "Product page → highlights", "Pack → nutrition table, row 3".',
+    }),
+    defineField({ name: 'observedAt', type: 'datetime', validation: (r) => r.required() }),
+    defineField({ name: 'source', title: 'Citation', type: 'reference', to: [{ type: 'source' }] }),
+    defineField({ name: 'snapshot', type: 'reference', to: [{ type: 'sourceSnapshot' }] }),
+    defineField({ name: 'observation', type: 'reference', to: [{ type: 'observation' }] }),
+  ],
+  validation: (r) =>
+    r.custom((v) => {
+      const x = v as { source?: unknown; snapshot?: unknown; observation?: unknown } | undefined;
+      return x && !x.source && !x.snapshot && !x.observation
+        ? 'Link the citation, snapshot or observation this value came from.'
+        : true;
+    }),
+  preview: { select: { title: 'value', subtitle: 'sourceType' } },
+});
+
 export const objectTypes = [
+  servingSpec,
+  discrepancyValue,
   quantity,
   imageWithAlt,
   seo,

@@ -1,7 +1,12 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
 import { FORMATS, MARKET_STATUS, VEG_STATUS } from '../../lib/constants';
 import { editorialFields, editorialGroups, requiredAfterDraft } from '../../lib/fields';
-import { languageWarning, requireApprovedReview, requireVegEvidence } from '../../lib/validation';
+import {
+  languageWarning,
+  requireApprovedReview,
+  requireLabelEvidence,
+  requireVegEvidence,
+} from '../../lib/validation';
 
 export const brand = defineType({
   name: 'brand',
@@ -96,6 +101,13 @@ export const product = defineType({
       validation: (r) => r.required(),
     }),
     defineField({
+      name: 'variant',
+      type: 'string',
+      group: 'content',
+      description:
+        'Flavour or strength, e.g. "Dark Chocolate", "5 mg". Different flavours are usually separate products.',
+    }),
+    defineField({
       name: 'category',
       type: 'reference',
       to: [{ type: 'category' }],
@@ -150,6 +162,14 @@ export const product = defineType({
       initialValue: false,
     }),
     defineField({
+      name: 'serving',
+      title: 'Serving (structured)',
+      type: 'servingSpec',
+      group: 'label',
+      description: 'e.g. 1 × scoop (35.5 g), 2 × capsule.',
+      validation: requiredAfterDraft('Structured serving is required before fact check.'),
+    }),
+    defineField({
       name: 'servingSize',
       type: 'quantity',
       group: 'label',
@@ -194,13 +214,8 @@ export const product = defineType({
       group: 'label',
       of: [defineArrayMember({ type: 'imageWithAlt' })],
       description:
-        'Dated photos of every panel. Required before fact check (not for demo content).',
-      validation: (r) =>
-        r.custom((value: unknown[] | undefined, ctx) => {
-          const doc = ctx.document as { workflowStatus?: string; isDemo?: boolean } | undefined;
-          if (doc?.isDemo || !doc?.workflowStatus || doc.workflowStatus === 'DRAFT') return true;
-          return value?.length ? true : 'Add label photos before moving past Draft.';
-        }),
+        'Dated photos of every panel. Required before fact check (not for demo content), unless the current label panel was transcribed from a confirmed submitted pack photo (kept private).',
+      validation: (r) => r.custom(requireLabelEvidence),
     }),
     defineField({ name: 'firstPublishedAt', type: 'datetime', group: 'workflow' }),
     defineField({

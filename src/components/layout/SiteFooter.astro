@@ -12,6 +12,7 @@ const cols = [
       { href: '/compare', label: 'Comparisons' },
       { href: '/guides', label: 'Guides' },
       { href: '/brands', label: 'Brands' },
+      { href: '/submit', label: 'Submit a supplement' },
     ],
   },
   {
@@ -24,11 +25,20 @@ const cols = [
       { href: '/methodology#corrections', label: 'Corrections & brand responses' },
     ],
   },
+  {
+    title: 'labels.fyi',
+    links: [
+      { href: '/contact', label: 'Contact' },
+      { href: '/privacy', label: 'Privacy' },
+      { href: '/terms', label: 'Terms of use' },
+      { href: '/terms#affiliate', label: 'Affiliate links' },
+    ],
+  },
 ];
 ---
 
 <footer class="mt-24 border-t-[6px] border-ink bg-paper-2/60">
-  <div class="page grid gap-10 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
+  <div class="page grid gap-10 py-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
     <div class="max-w-sm">
       <Wordmark size="lg" />
       <p class="mt-4 text-sm text-ink-2">

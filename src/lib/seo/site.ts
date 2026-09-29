@@ -3,7 +3,7 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 export const SITE = {
   name: 'labels.fyi',
   url: (PUBLIC_SITE_URL ?? 'https://labels.fyi').replace(/\/$/, ''),
-  tagline: "Decode the label. Know what's actually inside.",
+  tagline: 'Decode the label. Compare the formula. Check the claims.',
   description:
     'Evidence-based breakdowns of supplement labels, ingredients, claims and prices, built for Indian consumers.',
   locale: 'en_IN',
@@ -18,7 +18,7 @@ export function absoluteUrl(path: string): string {
 
 /** Title template: "Page — labels.fyi", capped for SERP display. */
 export function pageTitle(title?: string | null): string {
-  if (!title) return `${SITE.name}: Decode the label. Know what's actually inside.`;
+  if (!title) return `${SITE.name}: Decode the label. Compare the formula. Check the claims.`;
   return `${title} · ${SITE.name}`;
 }
 

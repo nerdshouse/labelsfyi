@@ -1,0 +1,47 @@
+---
+/**
+ * Static HTML fragment: the formula comparison for one ingredient. Fetched by
+ * /search when a query resolves to an ingredient, so search and ingredient
+ * pages share one server renderer. Not a page: no layout, not indexed
+ * (robots.txt disallows /partials/, and it is not in the sitemap).
+ */
+import FormulaComparison from '@/components/comparison/FormulaComparison.astro';
+import { compareIngredient } from '@/lib/comparison';
+import { getContentGraph } from '@/lib/content/repository';
+import { routes } from '@/lib/seo/site';
+
+export const partial = true;
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.ingredients
+    .map((ingredient) => ({ ingredient, rows: compareIngredient(graph, ingredient._id) }))
+    .filter((x) => x.rows.length > 0)
+    .map(({ ingredient, rows }) => ({
+      params: { slug: ingredient.slug },
+      props: { ingredient, rows },
+    }));
+}
+const { ingredient, rows } = Astro.props;
+---
+
+<section aria-labelledby="formula-comparison-title" data-comparison-partial={ingredient.slug}>
+  <header class="section-head mb-4">
+    <div>
+      <p class="caption mb-1 text-ink-3">Compare formulas</p>
+      <h2 id="formula-comparison-title" class="h2">
+        {rows.length} {rows.length === 1 ? 'product' : 'products'} containing{' '}
+        {ingredient.name.toLowerCase()}
+      </h2>
+    </div>
+    <p class="flex flex-wrap gap-x-4 text-sm font-medium">
+      <a href={`/supplements/${ingredient.slug}`} class="link" data-listing-link>
+        Filter &amp; compare all →
+      </a>
+      <a href={routes.ingredient(ingredient.slug)} class="link">
+        About {ingredient.name.toLowerCase()}
+      </a>
+    </p>
+  </header>
+  <FormulaComparison rows={rows} ingredientName={ingredient.name} />
+</section>

@@ -1,5 +1,15 @@
 # Data model
 
+> **Principles**
+>
+> 1. **Web content is discovery/input. Label evidence and verified observations are the basis for
+>    published product facts.**
+> 2. **More ingredients or a higher dose is not automatically a quality judgment.** labels.fyi exposes
+>    form, amount, transparency, evidence and cost so users can make their own comparisons. No scores,
+>    ranks or "best" lists.
+> 3. **Brand responses are preserved as provenance and clarification, not treated as automatic
+>    editorial approval.**
+
 Write models live in `sanity/schemas`; read models (GROQ projections) live in
 `src/lib/content/types.ts`. Keep them aligned.
 
@@ -75,13 +85,20 @@ nutrient with a `nutrientKey`). If any matching row hides its amount, cost per d
 
 See [ingestion.md](./ingestion.md) for the full design.
 
-| Type                 | Kind                  | Purpose                                                                                       |
-| -------------------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| `dataSource`         | document              | A site/organisation we may collect from (domain, type, active, access terms)                  |
-| `sourceSnapshot`     | document, append-only | What a URL showed at a time (hash, status, storage key, short excerpt, image refs with roles) |
-| `ingestionRun`       | document, append-only | One adapter run (status, counts, errors)                                                      |
-| `ingestionCandidate` | document              | Extracted product awaiting human verification; embeds `extractedFact[]` and `possibleMatch[]` |
-| `productReference`   | document              | External listing (URL, SKU/ASIN, variant, pack size) → one canonical product                  |
+| Type                 | Kind                  | Purpose                                                                                                                                                                               |
+| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dataSource`         | document              | A site/organisation we may collect from (domain, type, active, access terms)                                                                                                          |
+| `sourceSnapshot`     | document, append-only | What a URL showed at a time (hash, status, storage key, short excerpt, image refs with roles)                                                                                         |
+| `ingestionRun`       | document, append-only | One adapter run (status, counts, errors)                                                                                                                                              |
+| `ingestionCandidate` | document              | Extracted product awaiting human verification; embeds `extractedFact[]` and `possibleMatch[]`                                                                                         |
+| `productReference`   | document              | External listing (URL and/or GTIN, SKU/ASIN, variant, pack size) → one canonical product                                                                                              |
+| `labelSubmission`    | document, private     | A label submitted via /submit: status, typed metadata, photo keys + classifications, **internal** submitter name/contact. Never queried by the site except for photo classifications. |
+| `submissionImage`    | object                | Opaque R2 key, type, size, sha256, role, `imageKind`, `depictsExactProduct` (+ who/when confirmed)                                                                                    |
+
+Submission fields (Sprint 4): `ingestionCandidate.submission / unresolved / proposedProductChanges`
+(dataSource, snapshot and sourceUrl are required only when there is no submission),
+`observation.submission`, `labelPanel.sourceImage.submission / verifiedAt / supersedes`. See
+[submissions.md](./submissions.md).
 
 Provenance fields added to existing types: `observation.snapshot / extractedFrom / verifiedBy / verifiedAt`,
 `priceSnapshot.mrp / sourceUrl / snapshot / listing`, `labelPanel.snapshot`,
@@ -91,3 +108,39 @@ Provenance fields added to existing types: `observation.snapshot / extractedFrom
 **Three layers:** A = what a source said (`extractedFact`, never rendered) · B = what labels.fyi observed
 (`observation`, label panels, `claim.exactClaim`) · C = what it means (`editorialNote`, claim
 assessment/explanation). The site renders B and C, and never A.
+
+## Comparison-ready fields
+
+| Where                                                     | Field                                                                                                                                                            | Notes                                                                                                                                                          |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `product`                                                 | `variant`                                                                                                                                                        | Flavour/strength. Different flavours are usually separate products.                                                                                            |
+| `product`, `labelPanel`                                   | `serving` (`servingSpec`)                                                                                                                                        | `count` + `unit` (serving, capsule, tablet, softgel, strip, scoop, sachet, gummy, ml, g) + optional `mass`/`massUnit`.                                         |
+| `labelIngredient`                                         | `form`                                                                                                                                                           | Declared form, e.g. "Magnesium bisglycinate".                                                                                                                  |
+| `labelIngredient`                                         | `compoundAmount` / `compoundUnit`                                                                                                                                | Weight of the named compound per serving.                                                                                                                      |
+| `labelIngredient`                                         | `elementalAmount` / `elementalUnit` / `elementalBasis` (+ `elementalSource`)                                                                                     | Only when the label declares it (`label_declared`) or an editorial calculation cites its basis. Otherwise **unknown**, never derived from the compound weight. |
+| `labelIngredient`                                         | `sourceLocator`                                                                                                                                                  | e.g. "Supplement facts, row 2".                                                                                                                                |
+| `labelPanel`                                              | `sourceType`                                                                                                                                                     | `PHYSICAL_PACK`, `BRAND_SUPPLIED_LABEL` or `PRODUCT_ARTWORK`. Required.                                                                                        |
+| `labelPanel`                                              | `sourceImage` (`snapshot` + `imageKey`)                                                                                                                          | Required for artwork; the image must be classified and confirmed.                                                                                              |
+| `observation`                                             | `sourceType`, `sourceLocator`, `extractionMethod`, `verificationStatus`                                                                                          | Only `verified` observations render.                                                                                                                           |
+| `claim`                                                   | `claimSourceType`, `claimSourceLocator` (claim source) · `sources` (evidence sources) · `assessment`/`explanation` (editorial interpretation) · `researchStatus` | Claims render only with research status `EVIDENCE_IDENTIFIED` or `INSUFFICIENT_EVIDENCE_IDENTIFIED`.                                                           |
+| `snapshotImage`                                           | `imageKind`, `depictsExactProduct`, `depictsConfirmedBy/At`, `galleryPosition`                                                                                   | `PACK_PHOTO`, `PRINT_ARTWORK`, `MARKETING_GRAPHIC`, `RETYPESET_TABLE`, `UNKNOWN` × `CONFIRMED` / `UNCONFIRMED` / `NOT_THIS_PRODUCT`.                           |
+| `productReference`, `priceSnapshot`, `ingestionCandidate` | `gtin`                                                                                                                                                           | Digits only; validated check digit.                                                                                                                            |
+| `possibleMatch`                                           | `level`, `relation`, `reasons`                                                                                                                                   | Replaces the old name-similarity `score`.                                                                                                                      |
+
+### Label evidence strength
+
+| Evidence                                                                                                                        | Strength                           | Rendered      |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------- |
+| Physical pack, brand-supplied label file, confirmed pack photo                                                                  | strong ("label verified")          | yes           |
+| Confirmed print artwork of this exact product                                                                                   | provisional ("from label artwork") | yes, labelled |
+| Web/marketing/marketplace copy, unclassified or unconfirmed image, marketing graphic, re-typeset table, another product's image | rejected                           | **no**        |
+
+## Discrepancy & BrandResponse
+
+| Type            | Kind                     | Purpose                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `discrepancy`   | document, workflow-gated | Product + field + `values[]` (≥2 `discrepancyValue`s, each with source type, value as stated, locator, observedAt and citation/snapshot/observation) + status (`OPEN`, `AWAITING_BRAND`, `BRAND_RESPONDED`, `RESOLVED`, `UNRESOLVED`, `SUPERSEDED`) + severity (`INFORMATIONAL`, `MATERIAL`, `HIGH_ATTENTION`). Values lock after 24 h; resolution needs a named editor, date and note. |
+| `brandResponse` | document, workflow-gated | Contact details (internal), question, response as received, respondent role, supporting sources, the brand's stated resolution. **Never changes the discrepancy status.**                                                                                                                                                                                                               |
+
+Both render only when live and reviewed (named reviewer + review date), like claims. Severity
+describes how much a difference matters to a reader, never intent.

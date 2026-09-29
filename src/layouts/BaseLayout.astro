@@ -56,7 +56,13 @@ const graph = [
             window.dataLayer.push(arguments);
           };
           window.gtag('js', new Date());
-          window.gtag('config', id, { anonymize_ip: true });
+          // No query string or fragment: /search?q=… holds free text typed by visitors.
+          window.gtag('config', id, {
+            anonymize_ip: true,
+            page_location: location.origin + location.pathname,
+            // A referrer from /search?q=… would carry the query: keep origin + path only.
+            page_referrer: document.referrer.split(/[?#]/)[0],
+          });
         </script>
       </>
     )}

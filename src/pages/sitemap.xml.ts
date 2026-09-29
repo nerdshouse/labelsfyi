@@ -1,5 +1,9 @@
 import type { APIRoute } from 'astro';
 import { contentSource } from '@/lib/content/client';
+import { comparePath } from '@/lib/comparison/compare-two';
+import { goalSitemapPaths } from '@/lib/goals/goals';
+import { listingIngredients } from '@/lib/catalogue/consumer';
+import { buildReceipt } from '@/lib/receipt/receipt';
 import { getContentGraph } from '@/lib/content/repository';
 import { isoDate } from '@/lib/formatting/dates';
 import { absoluteUrl, routes } from '@/lib/seo/site';
@@ -32,9 +36,40 @@ export const GET: APIRoute = async () => {
           { path: '/guides' },
           { path: '/brands' },
           { path: '/methodology' },
+          { path: '/submit' },
+          { path: '/analyse' },
+          { path: '/contact' },
+          { path: '/privacy' },
+          { path: '/terms' },
+          ...g.products
+            .filter((p) => !p.noindex && buildReceipt(p))
+            .map((p) => ({ path: `/receipt/${p.slug}`, lastmod: isoDate(p._updatedAt) })),
           ...g.products
             .filter((p) => !p.noindex)
             .map((p) => ({ path: routes.product(p.slug), lastmod: isoDate(p._updatedAt) })),
+          // Ingredient comparison listings with at least one real published product.
+          ...listingIngredients(full)
+            .filter(
+              (i) => !i.noindex && i.products.some((p) => g.products.some((x) => x._id === p._id)),
+            )
+            .map((i) => ({ path: `/supplements/${i.slug}` })),
+          // Goal pages: published, reviewed (graph gate) and non-empty only.
+          ...goalSitemapPaths(full),
+          // Label comparisons: only the pairs product pages link to (a product and
+          // its related products), deduplicated. Bounded, never all n² pairs.
+          ...[
+            ...new Set(
+              g.products
+                .filter((p) => !p.noindex)
+                .flatMap((p) =>
+                  p.related
+                    .filter(
+                      (r) => !r.isDemo && g.products.some((x) => x._id === r._id && !x.noindex),
+                    )
+                    .map((r) => comparePath(p.slug, r.slug)),
+                ),
+            ),
+          ].map((path) => ({ path })),
           ...g.ingredients
             .filter((i) => !i.noindex)
             .map((i) => ({ path: routes.ingredient(i.slug), lastmod: isoDate(i._updatedAt) })),

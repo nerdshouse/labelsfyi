@@ -14,7 +14,17 @@ export const WORKFLOW_STATUS = [
 ];
 export const PUBLISHABLE_STATUSES = ['APPROVED', 'PUBLISHED', 'NEEDS_REVIEW'];
 /** Types whose publishing is gated by the editorial workflow. */
-export const WORKFLOW_TYPES = ['product', 'ingredient', 'claim', 'guide', 'comparison', 'brand'];
+export const WORKFLOW_TYPES = [
+  'goal',
+  'product',
+  'ingredient',
+  'claim',
+  'guide',
+  'comparison',
+  'brand',
+  'discrepancy',
+  'brandResponse',
+];
 /** Append-only record types: no delete/unpublish, corrections via supersession. */
 export const AUDIT_TYPES = [
   'observation',
@@ -151,6 +161,7 @@ export const VERIFICATION_STATUS = [
 export const EXTRACTED_FIELD = [
   opt('name', 'Product name'),
   opt('brand', 'Brand'),
+  opt('gtin', 'Barcode / GTIN'),
   opt('variant', 'Variant / flavour'),
   opt('pack_size', 'Pack size'),
   opt('serving_size', 'Serving size'),
@@ -183,4 +194,171 @@ export const MARKET_STATUS = [
   opt('available', 'Available'),
   opt('discontinued', 'Discontinued'),
   opt('unknown', 'Unknown'),
+];
+
+// ─── Comparison & provenance layer ───────────────────────────────────────
+/** Where a fact was observed. Web content is discovery; label evidence is the publishing basis. */
+export const SOURCE_KIND = [
+  opt('PHYSICAL_PACK', 'Physical pack'),
+  opt('BRAND_SUPPLIED_LABEL', 'Brand-supplied label file'),
+  opt('PRODUCT_ARTWORK', 'Product artwork / pack image (needs a classified image)'),
+  opt('BRAND_WEBSITE', 'Brand website'),
+  opt('MARKETPLACE', 'Marketplace listing'),
+  opt('MARKETING_COPY', 'Marketing copy'),
+  opt('OTHER', 'Other'),
+];
+export const PANEL_SOURCE_KIND = SOURCE_KIND.filter((o) =>
+  ['PHYSICAL_PACK', 'BRAND_SUPPLIED_LABEL', 'PRODUCT_ARTWORK'].includes(o.value),
+);
+export const IMAGE_KIND = [
+  opt('PACK_PHOTO', 'Photo of the actual pack'),
+  opt('PRINT_ARTWORK', 'Print artwork (label file render)'),
+  opt('MARKETING_GRAPHIC', 'Marketing graphic'),
+  opt('RETYPESET_TABLE', 'Re-typeset table'),
+  opt('UNKNOWN', 'Unknown'),
+];
+export const DEPICTS = [
+  opt('UNCONFIRMED', 'Unconfirmed'),
+  opt('CONFIRMED', 'Confirmed: this exact product'),
+  opt('NOT_THIS_PRODUCT', 'Not this product'),
+];
+export const SERVING_UNIT = [
+  'serving',
+  'capsule',
+  'tablet',
+  'softgel',
+  'strip',
+  'scoop',
+  'sachet',
+  'gummy',
+  'ml',
+  'g',
+].map((u) => opt(u, u));
+export const ELEMENTAL_BASIS = [
+  opt('label_declared', 'Declared on the label'),
+  opt('editorial_calculation', 'Editorial calculation with a cited basis'),
+];
+export const RESEARCH_STATUS = [
+  opt('NEEDS_EVIDENCE', 'Needs evidence'),
+  opt('IN_RESEARCH', 'In research'),
+  opt('EVIDENCE_IDENTIFIED', 'Evidence identified'),
+  opt('INSUFFICIENT_EVIDENCE_IDENTIFIED', 'Insufficient evidence identified'),
+];
+export const DISCREPANCY_STATUS = [
+  opt('OPEN', 'Open'),
+  opt('AWAITING_BRAND', 'Awaiting brand'),
+  opt('BRAND_RESPONDED', 'Brand responded'),
+  opt('RESOLVED', 'Resolved'),
+  opt('UNRESOLVED', 'Unresolved'),
+  opt('SUPERSEDED', 'Superseded'),
+];
+/** Attention level only. Never implies wrongdoing. */
+export const SEVERITY = [
+  opt('INFORMATIONAL', 'Informational'),
+  opt('MATERIAL', 'Material'),
+  opt('HIGH_ATTENTION', 'High attention'),
+];
+export const BRAND_RESPONSE_RESOLUTION = [
+  opt('WEBSITE_CORRECTED', 'Website corrected'),
+  opt('LABEL_CONFIRMED', 'Label confirmed'),
+  opt('FORMULATION_CHANGE', 'Formulation change'),
+  opt('PACKAGING_CHANGE', 'Packaging change'),
+  opt('BOTH_CORRECT_DIFFERENT_VERSIONS', 'Both correct (different versions)'),
+  opt('UNRESOLVED', 'Unresolved'),
+  opt('OTHER', 'Other'),
+];
+export const CONTACT_METHOD = ['email', 'phone', 'web_form', 'in_person', 'other'].map((m) =>
+  opt(m, m),
+);
+export const MATCH_LEVEL = [
+  opt('EXACT', 'Exact (same GTIN)'),
+  opt('HIGH_CONFIDENCE_CANDIDATE', 'High-confidence candidate'),
+  opt('POSSIBLE_MATCH', 'Possible match'),
+];
+
+// ─── Goals, commerce & assets (Sprint 6) ─────────────────────────────────
+
+/** Top-level paths a goal slug must never take (existing routes). */
+export const RESERVED_GOAL_SLUGS = [
+  'api',
+  'brands',
+  'categories',
+  'compare',
+  'compare-data',
+  'comparison-index',
+  'guides',
+  'ingredients',
+  'internal',
+  'methodology',
+  'partials',
+  'products',
+  'receipt',
+  'reviewers',
+  'robots',
+  'search',
+  'search-index',
+  'sitemap',
+  'submit',
+  'favicon',
+  '404',
+  'index',
+  'goals',
+  'demo',
+  'analyse',
+  'catalogue-index',
+  'supplements',
+];
+export const GOAL_INGREDIENT_RELATION = [
+  opt('COMMONLY_FOUND', 'Commonly found in products marketed for this goal'),
+  opt('EDITORIALLY_REVIEWED', 'Editorially reviewed (approved evidence record linked)'),
+];
+export const PRODUCT_GOAL_BASIS = [
+  opt('BRAND_MARKETING', 'Brand marketing (the brand markets it for this goal)'),
+  opt('EDITORIAL_CLASSIFICATION', 'Editorial classification'),
+  opt('INGREDIENT_MATCH', 'Ingredient match (suggestion only; needs editorial approval)'),
+];
+export const PRODUCT_GOAL_STATUS = [
+  opt('CANDIDATE', 'Candidate'),
+  opt('APPROVED', 'Approved'),
+  opt('REJECTED', 'Rejected'),
+];
+export const ASSET_TYPE = [
+  opt('PRODUCT_IMAGE', 'Product image'),
+  opt('BRAND_LOGO', 'Brand logo'),
+  opt('PACK_IMAGE', 'Pack image'),
+  opt('LABEL_IMAGE', 'Label image'),
+  opt('PRODUCT_COPY', 'Product copy'),
+];
+export const ASSET_PERMISSION_STATUS = [
+  opt('NOT_REQUESTED', 'Not requested'),
+  opt('REQUESTED', 'Requested'),
+  opt('AUTHORIZED', 'Authorized'),
+  opt('RESTRICTED', 'Restricted'),
+  opt('REVOKED', 'Revoked'),
+];
+/** Where a public image came from. Only some bases may be displayed. */
+export const IMAGE_PROVENANCE = [
+  opt('UNKNOWN', 'Unknown (never displayed)'),
+  opt('NOT_REQUESTED', 'Third-party, permission not requested (never displayed)'),
+  opt('AUTHORIZED', 'Authorized by the rights holder (link the permission)'),
+  opt('EDITORIAL_LABEL_PHOTO', 'Photo taken by labels.fyi of a pack we hold'),
+  opt('USER_SUBMITTED', 'Submitted via /submit (private; not displayed)'),
+  opt('RESTRICTED', 'Restricted (never displayed)'),
+  opt('REVOKED', 'Revoked (never displayed)'),
+];
+export const MERCHANT_KIND = [
+  opt('OFFICIAL_STORE', 'Official brand store'),
+  opt('MARKETPLACE', 'Marketplace'),
+  opt('QUICK_COMMERCE', 'Quick commerce'),
+  opt('PHARMACY', 'Online pharmacy'),
+  opt('RETAILER', 'Retailer'),
+];
+/** How a data source may be used. Automated collection needs explicit permission. */
+export const ACCESS_MODE = [
+  opt('NOT_PERMITTED', 'Not permitted (terms prohibit use/extraction)'),
+  opt('MANUAL_RESEARCH', 'Manual research only'),
+  opt('BRAND_PERMISSION', 'Brand permission'),
+  opt('BRAND_SUPPLIED_FEED', 'Brand-supplied feed'),
+  opt('AUTHORIZED_FEED', 'Authorized API / feed'),
+  opt('USER_SUBMITTED_LABEL', 'User-submitted labels'),
 ];

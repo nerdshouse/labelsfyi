@@ -1,0 +1,259 @@
+---
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+
+const crumbs = [{ name: 'Submit a supplement', href: '/submit' }];
+---
+
+<BaseLayout
+  title="Submit a supplement label"
+  description="Submit a supplement label for decoding. We only record what the submitted label shows. Missing information stays missing."
+  canonicalPath="/submit"
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    <div class="mt-6 grid gap-12 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="max-w-2xl">
+        <p class="caption text-ink-3">Submit a supplement</p>
+        <h1 class="h1 mt-2">Send us the label. We’ll decode it.</h1>
+        <p class="notice mt-6" data-submit-principle>
+          <strong class="font-semibold text-ink">
+            Submit a supplement label for decoding. We only record what the submitted label shows.
+            Missing information stays missing.
+          </strong>
+        </p>
+        <p class="mt-4 text-sm text-ink-2" data-update-note hidden>
+          You’re sending an updated label for a product we already cover. The new label is added as
+          a new dated record; the earlier label stays in the product’s history.
+        </p>
+
+        <form
+          data-submit-form
+          method="post"
+          action="/api/submissions"
+          enctype="multipart/form-data"
+          class="mt-8 space-y-6"
+          novalidate
+        >
+          <fieldset class="space-y-4">
+            <legend class="caption rule-heavy w-full pt-3 text-ink-3">Label photos</legend>
+            <p class="text-sm text-ink-3">
+              JPEG, PNG or WebP. Up to 10 MB each, 6 photos in total.
+            </p>
+            <label class="block">
+              <span class="font-semibold">
+                Front of pack <span class="text-ink-3">(required)</span>
+              </span>
+              <span class="block text-sm text-ink-3">
+                Product name, brand, variant and any headline figure.
+              </span>
+              <input
+                name="front"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                required
+                class="mt-2 block w-full text-sm file:mr-3 file:border file:border-ink file:bg-sheet file:px-3 file:py-2"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">
+                Facts / composition panel <span class="text-ink-3">(required)</span>
+              </span>
+              <span class="block text-sm text-ink-3">
+                Supplement facts or nutrition information, and the ingredient list. Flat, in focus,
+                all text readable.
+              </span>
+              <input
+                name="facts"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                required
+                class="mt-2 block w-full text-sm file:mr-3 file:border file:border-ink file:bg-sheet file:px-3 file:py-2"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">
+                Additional label photos <span class="text-ink-3">(optional, up to 4)</span>
+              </span>
+              <span class="block text-sm text-ink-3">
+                Barcode, back label, veg mark, directions, manufacturer and FSSAI details.
+              </span>
+              <input
+                name="additional"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                class="mt-2 block w-full text-sm file:mr-3 file:border file:border-ink file:bg-sheet file:px-3 file:py-2"
+              />
+            </label>
+          </fieldset>
+
+          <fieldset class="space-y-4">
+            <legend class="caption rule-heavy w-full pt-3 text-ink-3">About the product</legend>
+            <label class="block">
+              <span class="font-semibold">
+                Brand <span class="text-ink-3">(required)</span>
+              </span>
+              <input
+                name="brand"
+                type="text"
+                required
+                maxlength="120"
+                autocomplete="off"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">
+                Product name <span class="text-ink-3">(required)</span>
+              </span>
+              <input
+                name="productName"
+                type="text"
+                required
+                maxlength="160"
+                autocomplete="off"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">
+                Variant or flavour <span class="text-ink-3">(optional)</span>
+              </span>
+              <input
+                name="variant"
+                type="text"
+                maxlength="80"
+                autocomplete="off"
+                placeholder="e.g. Unflavoured, 60 capsules"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">
+                Product URL <span class="text-ink-3">(optional)</span>
+              </span>
+              <input
+                name="productUrl"
+                type="url"
+                inputmode="url"
+                placeholder="https://"
+                maxlength="500"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+            <input type="hidden" name="updateOfProduct" value="" />
+          </fieldset>
+
+          <fieldset class="space-y-4">
+            <legend class="caption rule-heavy w-full pt-3 text-ink-3">About you (optional)</legend>
+            <p class="text-sm text-ink-3">
+              Only used if we need to ask about the photos. Never published and never attached to
+              the product page.
+            </p>
+            <label class="block">
+              <span class="font-semibold">Your name</span>
+              <input
+                name="submitterName"
+                type="text"
+                maxlength="120"
+                autocomplete="name"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+            <label class="block">
+              <span class="font-semibold">Email or phone</span>
+              <input
+                name="submitterContact"
+                type="text"
+                maxlength="200"
+                autocomplete="email"
+                class="mt-1 block h-11 w-full border border-ink bg-sheet px-3"
+              />
+            </label>
+          </fieldset>
+
+          <!-- Honeypot: hidden from people and assistive tech. -->
+          <div class="hidden" aria-hidden="true">
+            <label>
+              Website <input name="website" type="text" tabindex="-1" autocomplete="off" />
+            </label>
+          </div>
+
+          <label class="flex items-start gap-3 text-sm">
+            <input name="rights" type="checkbox" required class="mt-1 size-4" />
+            <span>
+              I took these photos (or have the right to share them), and they don’t show anyone’s
+              face, prescriptions or personal details. I agree to the{' '}
+              <a href="/terms" class="link" target="_blank">
+                terms
+              </a>
+              ; see how we handle submissions in our{' '}
+              <a href="/privacy" class="link" target="_blank">
+                privacy notice
+              </a>
+              .
+            </span>
+          </label>
+
+          <div data-submit-errors class="notice hidden" role="alert"></div>
+          <button type="submit" class="btn btn-primary">
+            Submit label
+          </button>
+        </form>
+
+        <section
+          data-submit-done
+          hidden
+          tabindex="-1"
+          class="mt-8 border-2 border-ink bg-sheet p-4"
+          aria-live="polite"
+        >
+          <p class="font-semibold" data-submit-success>
+            Label received. It hasn’t been published yet. Our team will review the submitted label
+            before anything appears on labels.fyi.
+          </p>
+          <p class="mt-3 text-sm">
+            <a href="/submit" class="link">
+              Submit another label
+            </a>
+          </p>
+        </section>
+      </div>
+
+      <aside class="lg:pt-16">
+        <h2 class="caption rule-heavy pt-3 text-ink-3">What happens next</h2>
+        <ol class="mt-2 space-y-3 text-sm text-ink-2">
+          <li>
+            <strong class="text-ink">1. Transcribe.</strong> An editor records only what the label
+            shows.
+          </li>
+          <li>
+            <strong class="text-ink">2. Check.</strong> A second person checks every number against
+            your photos.
+          </li>
+          <li>
+            <strong class="text-ink">3. Review.</strong> A qualified reviewer checks claims and
+            context.
+          </li>
+          <li>
+            <strong class="text-ink">4. Publish.</strong> The breakdown and receipt go live, citing
+            the label as the dated source. Your name and contact details are never published.
+          </li>
+        </ol>
+        <p class="mt-4 text-xs text-ink-3">
+          We don’t estimate missing amounts, infer veg status, or add ratings.{' '}
+          <a href="/methodology" class="link">
+            Methodology
+          </a>
+        </p>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    import { initSubmitForm } from '@/components/submit/submit-form';
+    initSubmitForm();
+  </script>
+</BaseLayout>

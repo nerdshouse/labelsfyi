@@ -21,13 +21,23 @@
     "studio:build": "pnpm --filter @labels-fyi/studio run build",
     "studio:deploy": "pnpm --filter @labels-fyi/studio run deploy",
     "demo:export": "node scripts/export-demo-dataset.ts",
-    "deploy:cf": "pnpm build && wrangler deploy",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm studio:typecheck && pnpm studio:validate && pnpm build && pnpm cf:dry-run",
+    "build:production": "CLOUDFLARE_ENV=production DEPLOY_ENV=production CONTENT_SOURCE=sanity astro build",
+    "test:dist:production": "DIST_MODE=production node scripts/check-dist.ts",
+    "deploy:guard": "node scripts/deploy-guard.ts",
+    "deploy:cf": "env -u PRODUCTION_REHEARSAL -u SANITY_API_HOST pnpm build:production && pnpm test:dist:production && pnpm deploy:guard && wrangler deploy",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm studio:typecheck && pnpm studio:validate && pnpm build && pnpm test:dist && pnpm cf:dry-run",
     "studio:typecheck": "pnpm --filter @labels-fyi/studio run typecheck",
     "studio:validate": "pnpm --filter @labels-fyi/studio run validate",
-    "cf:dry-run": "wrangler deploy --dry-run"
+    "cf:dry-run": "wrangler deploy --dry-run",
+    "test:dist": "node scripts/check-dist.ts",
+    "local:pull": "node scripts/local-pull.ts",
+    "research:feed": "JITI_ALIAS=\"{\\\"@\\\":\\\"$PWD/src\\\"}\" jiti scripts/research/import-shopify-feed.ts",
+    "rehearsal:stub": "node scripts/rehearsal/sanity-stub.ts",
+    "build:rehearsal": "PRODUCTION_REHEARSAL=true SANITY_API_HOST=http://127.0.0.1:4999 SANITY_PROJECT_ID=rehearsal1 SANITY_DATASET=production SANITY_READ_TOKEN=rehearsal-read-token DEPLOY_ENV=production CONTENT_SOURCE=sanity astro build",
+    "test:routes": "node scripts/route-check.ts"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "14.3.3",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@fontsource-variable/newsreader": "^5.3.0",
@@ -37,6 +47,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.5",
     "groq-js": "^2.0.0",
+    "html-to-image": "1.11.13",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

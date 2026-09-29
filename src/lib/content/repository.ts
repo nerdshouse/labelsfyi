@@ -1,6 +1,17 @@
-import { groq } from './client';
+import { isDisplayableProductImage } from '@/lib/editorial/assets';
+import { isPublishablePanel } from '@/lib/editorial/evidence';
+import {
+  assertDatasetPrivate,
+  assertProductionBuild,
+  contentSource,
+  groq,
+  isProductionDeploy,
+} from './client';
+import { assertNoDemoDocuments, assertNoPlaceholderReviewers } from './production';
 import {
   BRANDS_QUERY,
+  GOALS_QUERY,
+  PRODUCT_GOALS_QUERY,
   CATEGORIES_QUERY,
   COMPARISONS_QUERY,
   GUIDES_QUERY,
@@ -18,8 +29,13 @@ import type {
   GuideSummary,
   IngredientDetail,
   IngredientSummary,
+  GoalData,
+  GoalDetail,
   LabelIngredientRow,
+  ProductGoalData,
   LabelNutrientRow,
+  LabelPanelData,
+  ObservationData,
   ProductDetail,
   ProductSummary,
   Ref,
@@ -57,6 +73,7 @@ export interface ContentGraph {
   brands: BrandDetail[];
   categories: CategoryDetail[];
   reviewers: ReviewerDetail[];
+  goals: GoalDetail[];
 }
 
 const KEY_NUTRIENTS = new Set(['protein']);
@@ -91,6 +108,8 @@ function toProductSummary(p: RawProduct | ProductDetail): ProductSummary {
   return {
     _id: p._id,
     name: p.name,
+    variant: p.variant,
+    serving: p.serving,
     slug: p.slug,
     brand: p.brand,
     category: p.category,
@@ -145,21 +164,76 @@ export interface RawContent {
   brands: RawBrand[];
   categories: RawCategory[];
   reviewers: ReviewerDetail[];
+  goals?: GoalData[];
+  productGoals?: ProductGoalData[];
+}
+
+/**
+ * Production read model: no demo document of any kind survives, and reviews
+ * by placeholder reviewers no longer count as approval, so fixture content
+ * cannot reach a production page, search index, sitemap or compare file even
+ * if it was imported into the production dataset. Pure; tested.
+ */
+export function forProduction(raw: RawContent): RawContent {
+  const real = <T>(xs: T[] | undefined): T[] =>
+    (xs ?? []).filter((x) => (x as { isDemo?: boolean }).isDemo !== true);
+  const realReviews = <
+    T extends { reviews?: Array<{ reviewer?: { isPlaceholder?: boolean } | null }> },
+  >(
+    x: T,
+  ): T => ({
+    ...x,
+    reviews: (x.reviews ?? []).filter((r) => r.reviewer && !r.reviewer.isPlaceholder),
+  });
+  const products = real(raw.products).map(realReviews);
+  const productIds = new Set(products.map((p) => p._id));
+  return {
+    products,
+    ingredients: real(raw.ingredients).map(realReviews),
+    guides: real(raw.guides).map(realReviews),
+    comparisons: real(raw.comparisons).map(realReviews),
+    brands: real(raw.brands),
+    categories: real(raw.categories),
+    reviewers: real(raw.reviewers).filter((r) => !r.isPlaceholder),
+    goals: real(raw.goals).map(realReviews),
+    productGoals: (raw.productGoals ?? []).filter((r) => productIds.has(r.product)),
+  };
 }
 
 /** Fetch every live document once. */
 export async function fetchRawContent(): Promise<RawContent> {
-  const [products, ingredients, guides, comparisons, brands, categories, reviewers] =
-    await Promise.all([
-      groq<RawProduct[]>(PRODUCTS_QUERY),
-      groq<RawIngredient[]>(INGREDIENTS_QUERY),
-      groq<RawGuide[]>(GUIDES_QUERY),
-      groq<RawComparison[]>(COMPARISONS_QUERY),
-      groq<RawBrand[]>(BRANDS_QUERY),
-      groq<RawCategory[]>(CATEGORIES_QUERY),
-      groq<ReviewerDetail[]>(REVIEWERS_QUERY),
-    ]);
-  return { products, ingredients, guides, comparisons, brands, categories, reviewers };
+  const [
+    products,
+    ingredients,
+    guides,
+    comparisons,
+    brands,
+    categories,
+    reviewers,
+    goals,
+    productGoals,
+  ] = await Promise.all([
+    groq<RawProduct[]>(PRODUCTS_QUERY),
+    groq<RawIngredient[]>(INGREDIENTS_QUERY),
+    groq<RawGuide[]>(GUIDES_QUERY),
+    groq<RawComparison[]>(COMPARISONS_QUERY),
+    groq<RawBrand[]>(BRANDS_QUERY),
+    groq<RawCategory[]>(CATEGORIES_QUERY),
+    groq<ReviewerDetail[]>(REVIEWERS_QUERY),
+    groq<GoalData[]>(GOALS_QUERY),
+    groq<ProductGoalData[]>(PRODUCT_GOALS_QUERY),
+  ]);
+  return {
+    products,
+    ingredients,
+    guides,
+    comparisons,
+    brands,
+    categories,
+    reviewers,
+    goals,
+    productGoals,
+  };
 }
 
 /**
@@ -169,6 +243,36 @@ export async function fetchRawContent(): Promise<RawContent> {
  */
 const hasApprovedReview = (doc: { reviews: unknown[] }) => doc.reviews.length > 0;
 
+/**
+ * Records created from a label submission (panels, observations) render only
+ * once a named reviewer approved the product at or after the moment the record
+ * was verified. A new product gets that approval before it can be published
+ * anyway; a label update to a live product stays hidden until an editor
+ * reviews it in Studio. A panel stays current until a panel that supersedes
+ * it passes the same gate, so earlier labels are never edited or hidden early.
+ */
+export function gateSubmissionRecords<
+  P extends {
+    reviews: Array<{ reviewedAt: string }>;
+    panels: LabelPanelData[];
+    observations: ObservationData[];
+  },
+>(p: P): P {
+  const approvals = p.reviews.map((r) => Date.parse(r.reviewedAt)).filter(Number.isFinite);
+  const approved = (r: { fromSubmission?: boolean; verifiedAt?: string | null }) => {
+    if (!r.fromSubmission) return true;
+    const at = Date.parse(r.verifiedAt ?? '');
+    return Number.isFinite(at) && approvals.some((a) => a >= at);
+  };
+  const panels = p.panels.filter(approved);
+  const superseded = new Set(panels.flatMap((x) => x.supersedes ?? []));
+  return {
+    ...p,
+    panels: panels.map((x) => (superseded.has(x._id) ? { ...x, isCurrent: false } : x)),
+    observations: p.observations.filter(approved),
+  };
+}
+
 /** Pure: resolve the internal-linking graph from raw query results. */
 export function assembleGraph(raw: RawContent): ContentGraph {
   const rawBrands = raw.brands;
@@ -177,7 +281,23 @@ export function assembleGraph(raw: RawContent): ContentGraph {
   const rawIngredients = raw.ingredients.filter(hasApprovedReview);
   const rawGuides = raw.guides.filter(hasApprovedReview);
   const rawComparisons = raw.comparisons.filter(hasApprovedReview);
-  const rawProducts = raw.products.filter(hasApprovedReview);
+  // Label panels without acceptable label evidence are dropped before anything
+  // (key actives, comparisons, costs) is derived from them.
+  const rawProducts = raw.products
+    .filter(hasApprovedReview)
+    .map(gateSubmissionRecords)
+    .map((p) => {
+      // Product images need a display basis (docs/assets.md); otherwise the
+      // page renders the neutral product tile.
+      const ctx = { productId: p._id, brandId: p.brand?._id ?? null, now: Date.now() };
+      const labelImages = p.labelImages.filter((i) => isDisplayableProductImage(i, ctx));
+      return {
+        ...p,
+        image: isDisplayableProductImage(p.image, ctx) ? p.image : null,
+        labelImages,
+        panels: p.panels.filter(isPublishablePanel),
+      };
+    });
 
   // Products whose brand is not live are not rendered: the brand link would 404.
   const liveBrandIds = new Set(rawBrands.map((b) => b._id));
@@ -275,14 +395,47 @@ export function assembleGraph(raw: RawContent): ContentGraph {
       .map((cmp) => cmp.summary),
   }));
 
-  return { products, ingredients, guides, comparisons, brands, categories, reviewers };
+  // Goals: only approved relationships to published products. Nothing is
+  // inferred from ingredients here (docs/goals.md).
+  const liveIds = new Set(products.map((p) => p._id));
+  const goals: GoalDetail[] = (raw.goals ?? []).filter(hasApprovedReview).map((g) => {
+    const rels = (raw.productGoals ?? []).filter((r) => r.goal === g._id && liveIds.has(r.product));
+    const byProduct = new Map<string, ProductGoalData[]>();
+    for (const r of rels) byProduct.set(r.product, [...(byProduct.get(r.product) ?? []), r]);
+    return {
+      ...g,
+      memberships: [...byProduct].map(([productId, relationships]) => ({
+        productId,
+        relationships,
+      })),
+    };
+  });
+
+  return { products, ingredients, guides, comparisons, brands, categories, reviewers, goals };
 }
 
 let graphPromise: Promise<ContentGraph> | undefined;
 
 /** The full, resolved content graph. Memoised for the lifetime of a build. */
 export function getContentGraph(): Promise<ContentGraph> {
-  graphPromise ??= fetchRawContent().then(assembleGraph);
+  if (isProductionDeploy) {
+    assertProductionBuild();
+    if (contentSource === 'demo')
+      throw new Error(
+        'DEPLOY_ENV=production refuses the demo content source. Set CONTENT_SOURCE=sanity.',
+      );
+  }
+  graphPromise ??= (isProductionDeploy ? assertDatasetPrivate() : Promise.resolve())
+    .then(fetchRawContent)
+    .then((raw) => {
+      if (!isProductionDeploy) return raw;
+      // Fail loudly if fixtures ever reach the production dataset, then strip
+      // anything demo-flagged and placeholder-reviewed as a second layer.
+      assertNoDemoDocuments({ ...raw });
+      assertNoPlaceholderReviewers(raw.reviewers);
+      return forProduction(raw);
+    })
+    .then(assembleGraph);
   return graphPromise;
 }
 

@@ -1,0 +1,116 @@
+---
+import { presentDiscrepancies } from '@/lib/comparison';
+import type { DiscrepancyData } from '@/lib/content/types';
+
+/**
+ * Differences between sources. Each source's value is shown exactly as it was
+ * recorded; nothing is overwritten. Status and attention level are neutral
+ * descriptions, not findings about intent. Brand responses appear as the
+ * brand's statement; labels.fyi's status is shown separately.
+ */
+interface Props {
+  discrepancies: DiscrepancyData[];
+  sourceNumbers: Map<string, number>;
+}
+const { discrepancies, sourceNumbers } = Astro.props;
+const items = presentDiscrepancies(discrepancies);
+const cite = (id: string | null) => (id ? sourceNumbers.get(id) : undefined);
+---
+
+<ol class="space-y-6">
+  {items.map((d) => (
+    <li class="border-2 border-ink bg-sheet">
+      <header class="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink px-3 py-2 sm:px-4">
+        <h3 class="font-semibold">{d.field}</h3>
+        <p class="caption flex gap-2 text-ink-3">
+          <span class:list={['tag', d.isOpen && 'tag-marker']}>{d.status}</span>
+          <span class="tag">Attention: {d.severity}</span>
+        </p>
+      </header>
+      <table class="facts px-3">
+        <caption class="sr-only">Values recorded for {d.field}, by source</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="pl-3 sm:pl-4">
+              Source
+            </th>
+            <th scope="col">Value as recorded</th>
+            <th scope="col" class="max-sm:hidden">
+              Where
+            </th>
+            <th scope="col" class="n pr-3 sm:pr-4">
+              Observed
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.values.map((v) => (
+            <tr>
+              <th scope="row" class="pl-3 text-left font-semibold sm:pl-4">
+                {v.source}
+                {cite(v.sourceId) && (
+                  <a
+                    href={`#source-${cite(v.sourceId)}`}
+                    class="link ml-1 font-mono text-xs font-normal"
+                  >
+                    [{cite(v.sourceId)}]
+                  </a>
+                )}
+              </th>
+              <td class="font-mono">{v.value}</td>
+              <td class="text-xs text-ink-3 max-sm:hidden">{v.locator ?? '—'}</td>
+              <td class="n num pr-3 text-xs text-ink-3 sm:pr-4">{v.observedAt ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div class="space-y-2 px-3 py-3 text-sm sm:px-4">
+        {d.notes && <p class="text-ink-2">{d.notes}</p>}
+        {d.resolution && (
+          <p class="text-ink-2">
+            <strong class="font-semibold text-ink">Resolved {d.resolution.at}.</strong>{' '}
+            {d.resolution.note}
+          </p>
+        )}
+        <p class="text-xs text-ink-3">Recorded {d.detectedAt}.</p>
+        {d.brandResponses.map((r) => (
+          <section class="mt-3 border-l-[3px] border-ink pl-3" aria-label="Brand response">
+            <p class="caption text-ink-3">
+              Brand response{r.respondedAt ? ` · ${r.respondedAt}` : ''}
+              {r.respondentRole && ` · ${r.respondentRole}`}
+            </p>
+            {r.response ? (
+              <blockquote class="mt-1 text-ink-2">“{r.response}”</blockquote>
+            ) : (
+              <p class="mt-1 text-ink-3">Contacted {r.contactedAt}; no response recorded yet.</p>
+            )}
+            {r.statedResolution && (
+              <p class="mt-1 text-xs text-ink-3">
+                The brand’s stated outcome:{' '}
+                <span class="font-semibold text-ink-2">{r.statedResolution}</span>. This is the
+                brand’s statement; the status above is labels.fyi’s.
+              </p>
+            )}
+            {r.supportingSourceIds.length > 0 && (
+              <p class="mt-1 text-xs text-ink-3">
+                Supporting material:{' '}
+                {r.supportingSourceIds.map((id) =>
+                  cite(id) ? (
+                    <a href={`#source-${cite(id)}`} class="link mr-1 font-mono">
+                      [{cite(id)}]
+                    </a>
+                  ) : null,
+                )}
+              </p>
+            )}
+          </section>
+        ))}
+        {d.awaitingEditorialDecision && (
+          <p class="text-xs text-ink-3">
+            We are reviewing the brand’s response against the label evidence.
+          </p>
+        )}
+      </div>
+    </li>
+  ))}
+</ol>

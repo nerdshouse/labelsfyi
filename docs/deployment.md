@@ -34,52 +34,58 @@ never shipped to the browser.
 
 ## Cloudflare
 
-The site is static and deployed as **Workers static assets** (`wrangler.jsonc`, no Worker script):
+**The production runbook is [production.md](./production.md).** In short:
+
+- Public pages are prerendered static assets. The Worker `labelsfyi` serves only `/analyse`,
+  `/compare/*`, `/api/*` and `/internal/*`.
+- `wrangler.jsonc` top level = local development; `env.production` = the live site. The adapter
+  bakes the environment selected at build time (`CLOUDFLARE_ENV=production`, set by
+  `pnpm build:production`) into `dist/server/wrangler.json`, which `wrangler deploy` uses.
+- Deploys run through `.github/workflows/deploy.yml`: push, Sanity publish, daily rebuild. Locally:
 
 ```bash
-pnpm deploy:cf      # astro build && wrangler deploy
+pnpm deploy:cf
 ```
 
-For CI (recommended: Cloudflare Workers Builds or GitHub Actions):
+It runs `build:production`, then the production dist checks, then `deploy:guard`, then
+`wrangler deploy`.
 
-- Build command: `pnpm build`
-- Deploy command: `npx wrangler deploy`
-- Environment variables: `PUBLIC_SITE_URL`, `SANITY_PROJECT_ID`, `SANITY_DATASET`, `CONTENT_SOURCE=sanity`,
-  and optionally `PUBLIC_GA_MEASUREMENT_ID`, `PUBLIC_CF_ANALYTICS_TOKEN`, `PUBLIC_GSC_VERIFICATION`.
-- Node 22.12+ and pnpm 10.
-
-### Rebuild on publish
-
-Create a Cloudflare deploy hook (or a GitHub `repository_dispatch`) and add it as a Sanity webhook
-(sanity.io/manage → API → Webhooks), filtered to `_type in ["product","ingredient","claim","guide","comparison","brand","labelPanel","priceSnapshot","affiliateOffer","editorialReview"]`.
-
-Also schedule a **daily rebuild**. Review-due flags, price-staleness notes and affiliate link expiry
-are evaluated at build time.
-
-### Domain
-
-Add `labels.fyi` as a custom domain on the Worker. Set `PUBLIC_SITE_URL=https://labels.fyi`.
+- R2 bucket `labels-fyi-submissions` is private. Secrets are `REVIEW_USER`, `REVIEW_PASSWORD` and
+  `SANITY_WRITE_TOKEN` (`--env production`). Cloudflare Access is in front of `/internal/*` and
+  verified in the Worker.
 
 ## Environment variables
 
-| Variable                    | Where         | Required         | Purpose                      |
-| --------------------------- | ------------- | ---------------- | ---------------------------- |
-| `PUBLIC_SITE_URL`           | site          | yes (prod)       | Canonical origin             |
-| `CONTENT_SOURCE`            | site          | no               | `auto` \| `sanity` \| `demo` |
-| `SANITY_PROJECT_ID`         | site          | for Sanity       |                              |
-| `SANITY_DATASET`            | site          | no               | default `production`         |
-| `SANITY_API_VERSION`        | site          | no               | default `2025-02-19`         |
-| `SANITY_READ_TOKEN`         | site (secret) | private datasets | server-only                  |
-| `PUBLIC_GA_MEASUREMENT_ID`  | site          | no               | GA4; nothing loads if unset  |
-| `PUBLIC_CF_ANALYTICS_TOKEN` | site          | no               | Cloudflare Web Analytics     |
-| `PUBLIC_GSC_VERIFICATION`   | site          | no               | Search Console meta tag      |
-| `SANITY_STUDIO_PROJECT_ID`  | studio        | yes              |                              |
-| `SANITY_STUDIO_DATASET`     | studio        | no               |                              |
+| Variable                            | Where           | Required         | Purpose                                             |
+| ----------------------------------- | --------------- | ---------------- | --------------------------------------------------- |
+| `PUBLIC_SITE_URL`                   | site            | yes (prod)       | Canonical origin                                    |
+| `CONTENT_SOURCE`                    | site            | no               | `auto` \| `sanity` \| `demo`                        |
+| `SANITY_PROJECT_ID`                 | site            | for Sanity       |                                                     |
+| `SANITY_DATASET`                    | site            | no               | default `production`                                |
+| `SANITY_API_VERSION`                | site            | no               | default `2025-02-19`                                |
+| `SANITY_READ_TOKEN`                 | site (secret)   | private datasets | server-only                                         |
+| `PUBLIC_GA_MEASUREMENT_ID`          | site            | no               | GA4; nothing loads if unset                         |
+| `PUBLIC_CF_ANALYTICS_TOKEN`         | site            | no               | Cloudflare Web Analytics                            |
+| `PUBLIC_GSC_VERIFICATION`           | site            | no               | Search Console meta tag                             |
+| `SANITY_STUDIO_PROJECT_ID`          | studio          | yes              |                                                     |
+| `DEPLOY_ENV`                        | site + worker   | yes (prod)       | `production` enables every refusal in production.md |
+| `PRODUCTION_REHEARSAL`              | site            | no               | local rehearsal only; never deployable              |
+| `SANITY_API_HOST`                   | site            | no               | rehearsal stub only (refused otherwise)             |
+| `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | worker          | yes (prod)       | Cloudflare Access JWT verification for `/internal`  |
+| `REVIEW_USER` / `REVIEW_PASSWORD`   | worker (secret) | for review       | Basic auth for `/internal/*`; fails closed if unset |
+| `SANITY_WRITE_TOKEN`                | worker (secret) | for submissions  | server-only; never in the build                     |
+| `SUBMISSIONS_PRIVATE_DATASET`       | worker          | for submissions  | must be `true`; hard prerequisite                   |
+| `SANITY_STUDIO_DATASET`             | studio          | no               |                                                     |
 
 Variables are validated by Astro's `env.schema` (`astro.config.mjs`). Never commit `.env`.
 
 ## Analytics events
 
 GA4 events (via `src/lib/analytics/events.ts`): `product_view`, `search`, `comparison_view`,
-`affiliate_click` (product, merchant, relationship, page, timestamp), and `newsletter_signup`
-(reserved). Mark `affiliate_click` as a key event in GA4.
+`compare`, `affiliate_click`, `buy_click`, `goal_view`, `ingredient_view`, `analyse_url`,
+`analyse_result`, `submit_verification`, `receipt_view` and `receipt_share`. Mark `affiliate_click`
+and `buy_click` as key events in GA4.
+
+Every parameter passes an allowlist (`sanitizeParams`): public slugs, enums, counts and our own
+paths only. Search text, submitted URLs, e-mails, phones, free text, Sanity ids, R2 keys and
+secrets are dropped. Page views are sent without query strings or fragments.

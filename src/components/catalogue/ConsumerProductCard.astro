@@ -1,0 +1,175 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+import type { ConsumerCard } from '@/lib/catalogue/consumer';
+import { comparePath } from '@/lib/comparison/compare-two';
+import { FORMAT_LABEL } from '@/lib/editorial/meta';
+
+/**
+ * Text-first product card for the consumer comparison layer. No image, no
+ * marketing copy, no score: brand, product, the requested ingredient's
+ * declared amounts, serving, dated price, label status, and a match label
+ * that always shows the factors behind it.
+ */
+interface Props {
+  card: ConsumerCard;
+  partners: ConsumerCard[];
+}
+const { card: c, partners } = Astro.props;
+const format = FORMAT_LABEL[c.format] ?? c.format;
+// Explicit dimensions: elemental first, then compound (with its form), never mixed.
+const ORDER = { elemental: 0, compound: 1, declared: 2 } as const;
+const KIND_LABEL = {
+  elemental: 'Elemental amount',
+  compound: 'Compound amount',
+  declared: 'Amount',
+} as const;
+const amounts = [...c.amounts].sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
+const primary = amounts.find((a) => a.value !== 'Not disclosed') ?? amounts[0];
+const buy = c.buy[0] ?? null;
+---
+
+<article
+  class="flex flex-col border-2 border-ink bg-sheet"
+  data-consumer-card
+  data-slug={c.slug}
+  data-brand={c.brand}
+  data-name={c.name}
+  data-forms={c.forms.join('|')}
+  data-elemental={c.elementalValue ?? ''}
+  data-compound={c.compoundValue ?? ''}
+  data-veg={c.vegStatus === 'VEGETARIAN' || c.vegStatus === 'VEGAN' ? '1' : '0'}
+  data-verified={c.labelVerified ? '1' : '0'}
+  data-evidence={c.claimsChecked > 0 ? '1' : '0'}
+  data-single={c.others.length === 0 ? '1' : '0'}
+  data-per-serving={c.price?.perServingValue ?? ''}
+  data-match-rank={c.match.rank}
+  data-verified-at={c.verifiedAt ?? ''}
+>
+  <div class="border-b border-ink px-3 pt-3 pb-2">
+    <p class="caption text-ink-3">{c.brand}</p>
+    <h3 class="mt-0.5 font-serif text-lg leading-snug">
+      <a href={c.href} class="hover:underline" data-decoder-link>
+        {c.name}
+      </a>
+    </h3>
+    {c.variant && !c.name.includes(c.variant) && <p class="text-sm text-ink-2">{c.variant}</p>}
+  </div>
+
+  <div class="space-y-1 px-3 py-3 text-sm">
+    <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5" data-amounts>
+      {amounts.map((a) => (
+        <>
+          <dt class="text-xs text-ink-3" data-amount-kind={a.kind}>
+            {KIND_LABEL[a.kind]}
+          </dt>
+          <dd
+            class:list={[
+              'num font-mono',
+              a === primary && 'text-base',
+              a.value === 'Not disclosed' && 'font-sans text-xs text-ink-3 italic',
+            ]}
+            data-primary-amount={a === primary ? '' : undefined}
+          >
+            {a.value}
+            {a.value !== 'Not disclosed' && (
+              <span class="font-sans text-xs text-ink-3"> / serving</span>
+            )}
+          </dd>
+        </>
+      ))}
+    </dl>
+    <p class="flex flex-wrap items-center gap-x-2 text-ink-2">
+      <VegMark status={c.vegStatus} size={12} />
+      <span>
+        {format} · {c.serving}
+      </span>
+    </p>
+    <p data-price>
+      {c.price ? (
+        <>
+          <span class="num font-mono">{c.price.perServing ?? c.price.amount}</span>
+          <span class="text-ink-3">{c.price.perServing ? ' / serving' : ' (pack)'}</span>
+          <span class="block text-xs text-ink-3">
+            {c.price.merchant} · observed {c.price.observedAt}
+          </span>
+        </>
+      ) : (
+        <span class="text-ink-3 italic">No price observed</span>
+      )}
+    </p>
+    <p class:list={['caption', c.labelVerified ? 'text-ink' : 'text-ink-3']} data-label-status>
+      {c.labelVerified
+        ? 'Label verified ✓'
+        : c.labelEvidence === 'Artwork only'
+          ? 'Label artwork only'
+          : 'Label not verified'}
+    </p>
+    {(c.keyIngredients.length > 1 || c.others.length > 0) && (
+      <p class="text-xs text-ink-2">
+        <span class="text-ink-3">What’s inside:</span>{' '}
+        {[...new Set([...c.keyIngredients, ...c.others])].slice(0, 5).join(' · ')}
+      </p>
+    )}
+  </div>
+
+  <details class="border-t border-line px-3 py-2 text-sm" data-match>
+    <summary class="cursor-pointer">
+      <span class="font-semibold">{c.match.level}</span>
+      <span class="text-xs text-ink-3"> · why</span>
+    </summary>
+    <p class="mt-1 text-xs text-ink-3">{c.match.explanation}</p>
+    <ul class="mt-1 space-y-0.5 text-xs">
+      {c.match.factors.map((f) => (
+        <li>
+          <span class="inline-block w-4 font-mono">
+            {f.ok === true ? '✓' : f.ok === false ? '⚠' : '·'}
+          </span>
+          {f.text}
+        </li>
+      ))}
+    </ul>
+  </details>
+
+  <div class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-ink px-3 py-3 text-sm">
+    <a href={c.href} class="link font-medium">
+      View label
+    </a>
+    {partners.length > 0 && (
+      <details class="relative" data-compare>
+        <summary class="cursor-pointer font-medium">Compare</summary>
+        <ul class="mt-1 space-y-1">
+          {partners.slice(0, 6).map((x) => (
+            <li>
+              <a
+                href={comparePath(c.slug, x.slug)}
+                class="link"
+                data-compare-link
+                data-track="compare"
+                data-from={c.slug}
+                data-to={x.slug}
+              >
+                vs {x.brand} {x.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
+    {buy && (
+      <a
+        href={buy.href}
+        rel={buy.rel}
+        target="_blank"
+        class="link ml-auto font-medium"
+        data-buy-link={buy.official ? 'official' : 'merchant'}
+        data-track="buy_click"
+        data-product={c.slug}
+        data-merchant={buy.merchant}
+        data-affiliate={buy.affiliate ? '1' : '0'}
+      >
+        {buy.official ? 'Buy from brand' : `Buy at ${buy.merchant}`} →
+        {buy.affiliate && <span class="text-xs text-ink-3"> (affiliate)</span>}
+      </a>
+    )}
+  </div>
+</article>

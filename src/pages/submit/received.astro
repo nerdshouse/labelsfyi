@@ -1,0 +1,24 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Label received"
+  description="Your label was received. It hasn't been published yet."
+  canonicalPath="/submit/received"
+  noindex
+>
+  <div class="page max-w-2xl pt-10">
+    <p class="caption text-ink-3">Submit a supplement</p>
+    <h1 class="h1 mt-2">Label received.</h1>
+    <p class="lede mt-4" data-submit-success>
+      Label received. It hasn’t been published yet. Our team will review the submitted label before
+      anything appears on labels.fyi.
+    </p>
+    <p class="mt-6">
+      <a href="/submit" class="link">
+        Submit another label
+      </a>
+    </p>
+  </div>
+</BaseLayout>

@@ -1,0 +1,69 @@
+{
+  "reviewedAt": "2026-09-29",
+  "note": "Access decisions for the Sprint 6 research catalogue. Excerpts are short quotes of the live terms on the review date. Re-check before any future collection. hosts/productPath are used at runtime by the URL analyser (src/lib/sources/policy.ts): unknown hosts and non-product paths are refused.",
+  "sources": [
+    {
+      "id": "briyo",
+      "name": "Briyo Supplements",
+      "domain": "www.briyosupplements.com",
+      "accessMode": "BRAND_PERMISSION",
+      "permissionBasis": "Stated by the labels.fyi operator on 2026-09-29 that Briyo is a client-owned/authorized brand. NOT YET VERIFIED: no written permission is on file. Automated analysis and feed import stay refused until a signed assetPermission record (status AUTHORIZED, scope incl. FACTUAL_DATA) exists and permissionVerified is set to true with permissionRecord = its _id.",
+      "robots": "Product pages allowed for all agents; ClaudeBot and anthropic-ai explicitly welcomed. /cart, /checkout, /account, sorted/filtered collections disallowed.",
+      "termsExcerpt": "ToS: users \"agree not to sell, license, rent, modify, distribute, copy, reproduce, transmit, publicly display…\" without permission. Proceeding only on the brand-permission basis above.",
+      "collected": "One request to the public /products.json feed. No HTML crawling, no images downloaded.",
+      "hosts": ["www.briyosupplements.com", "briyosupplements.com"],
+      "sourceKind": "BRAND_WEBSITE",
+      "productPath": "^/products/[a-z0-9][a-z0-9-]{0,120}/?$",
+      "permissionVerified": false,
+      "permissionRecord": null
+    },
+    {
+      "id": "carbamide-forte",
+      "name": "Carbamide Forte",
+      "domain": "mycf.in",
+      "accessMode": "NOT_PERMITTED",
+      "robots": "Product and collection pages allowed.",
+      "termsExcerpt": "Prohibited uses include: \"To spam, phish, crawl, or scrape\"; \"You agree not to reproduce, duplicate, copy … any portion of the Service without express written permission\".",
+      "collected": "Nothing. Needs written permission, a brand-supplied feed, or user-submitted labels.",
+      "hosts": ["mycf.in", "www.mycf.in"],
+      "sourceKind": "BRAND_WEBSITE",
+      "permissionVerified": false
+    },
+    {
+      "id": "wellbeing-nutrition",
+      "name": "Wellbeing Nutrition",
+      "domain": "wellbeingnutrition.com",
+      "accessMode": "NOT_PERMITTED",
+      "robots": "Product pages allowed (Shopify standard).",
+      "termsExcerpt": "\"Any use of this website or its contents, including copying or storing it … other than for your own personal, non-commercial use is prohibited without the written permission\".",
+      "collected": "Nothing (labels.fyi is commercial: it has buy links). Consistent with the Sprint 1 research-only decision.",
+      "hosts": ["wellbeingnutrition.com", "www.wellbeingnutrition.com"],
+      "sourceKind": "BRAND_WEBSITE",
+      "permissionVerified": false
+    },
+    {
+      "id": "rasayanam",
+      "name": "Rasayanam",
+      "domain": "rasayanam.in",
+      "accessMode": "NOT_PERMITTED",
+      "robots": "Product and collection pages allowed.",
+      "termsExcerpt": "Prohibited: \"to spam, phish, pharm, pretext, spider, crawl, or scrape\"; must not \"reproduce, duplicate, copy … any portion of the Service … without express written permission\".",
+      "collected": "Nothing. Needs written permission, a brand-supplied feed, or user-submitted labels.",
+      "hosts": ["rasayanam.in", "www.rasayanam.in"],
+      "sourceKind": "BRAND_WEBSITE",
+      "permissionVerified": false
+    },
+    {
+      "id": "rasayan-in",
+      "name": "rasayan.in (not a supplement brand)",
+      "domain": "www.rasayan.in",
+      "accessMode": "NOT_PERMITTED",
+      "robots": "n/a",
+      "termsExcerpt": "IndiaMART-hosted water-treatment chemicals business (biocides, RO chemicals). Out of scope.",
+      "collected": "Nothing. The intended brand was rasayanam.in.",
+      "hosts": ["rasayan.in", "www.rasayan.in"],
+      "sourceKind": "OTHER",
+      "permissionVerified": false
+    }
+  ]
+}

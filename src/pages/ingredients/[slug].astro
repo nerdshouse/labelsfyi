@@ -3,7 +3,7 @@ import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
 import ReviewLine from '@/components/editorial/ReviewLine.astro';
 import SourceList from '@/components/editorial/SourceList.astro';
 import DoseTable from '@/components/ingredient/DoseTable.astro';
-import ProductRow from '@/components/product/ProductRow.astro';
+import FormulaComparison from '@/components/comparison/FormulaComparison.astro';
 import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
 import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
 import DemoFlag from '@/components/ui/DemoFlag.astro';
@@ -13,12 +13,12 @@ import InPageNav from '@/components/ui/InPageNav.astro';
 import PortableText from '@/components/ui/PortableText.astro';
 import SectionHead from '@/components/ui/SectionHead.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { compareIngredient } from '@/lib/comparison';
 import { getContentGraph } from '@/lib/content/repository';
 import type { IngredientDetail } from '@/lib/content/types';
 import { ASSESSMENT } from '@/lib/editorial/meta';
 import { inlineName } from '@/lib/editorial/product';
 import { collectSources } from '@/lib/editorial/sources';
-import { formatAmount } from '@/lib/formatting/quantity';
 import { ingredientPage } from '@/lib/seo/jsonld';
 import { routes } from '@/lib/seo/site';
 
@@ -42,20 +42,6 @@ const sources = collectSources(
   i.studiedDoses.map((d) => d.source),
 );
 const sourceNumbers = new Map(sources.map((s, n) => [s._id, n + 1]));
-
-// Amount of *this* ingredient per serving in each product, from the current label.
-const amountIn = (productId: string): string | undefined => {
-  const product = graph.products.find((p) => p._id === productId);
-  const rows = product?.panels
-    .filter((x) => x.isCurrent)
-    .flatMap((x) => x.ingredients.filter((r) => r.ingredient?._id === i._id));
-  if (!rows?.length) return undefined;
-  const disclosed = rows.filter((r) => r.amountPerServing !== null);
-  if (disclosed.length !== rows.length) return `${i.name}: amount not disclosed`;
-  return disclosed
-    .map((r) => `${formatAmount(r.amountPerServing, r.unit)} ${inlineName(i.name)}`)
-    .join(' + ');
-};
 
 const crumbs = [
   { name: 'Ingredients', href: '/ingredients' },
@@ -230,14 +216,10 @@ const nav = [
       <SectionHead
         id="products"
         kicker="07 · Products"
-        title={`Products containing ${inlineName(i.name)}`}
+        title={`Compare products containing ${inlineName(i.name)}`}
       />
       {i.products.length ? (
-        <div class="border-t border-ink">
-          {i.products.map((p) => (
-            <ProductRow product={p} detail={amountIn(p._id)} />
-          ))}
-        </div>
+        <FormulaComparison rows={compareIngredient(graph, i._id)} ingredientName={i.name} />
       ) : (
         <EmptyState title="No products yet">
           We haven’t published a product that lists this ingredient on its label yet.

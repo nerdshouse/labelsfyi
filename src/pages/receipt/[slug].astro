@@ -1,0 +1,186 @@
+---
+import SupplementReceipt from '@/components/receipt/SupplementReceipt.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import Icon from '@/components/ui/Icon.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getContentGraph } from '@/lib/content/repository';
+import { buildReceipt, type Receipt } from '@/lib/receipt/receipt';
+import { routes } from '@/lib/seo/site';
+
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.products
+    .map((p) => ({ p, receipt: buildReceipt(p) }))
+    .filter(
+      (x): x is { p: (typeof graph.products)[number]; receipt: Receipt } => x.receipt !== null,
+    )
+    .map(({ p, receipt }) => ({
+      params: { slug: p.slug },
+      props: { receipt, category: p.category },
+    }));
+}
+
+const { receipt: r, category } = Astro.props;
+const lp = r.labelPanel;
+const crumbs = [
+  { name: 'Products', href: '/products' },
+  ...(category ? [{ name: category.name, href: routes.category(category.slug) }] : []),
+  { name: r.productName, href: r.productHref },
+  { name: 'Receipt', href: r.href },
+];
+const facts: Array<[string, string]> = [
+  [
+    'Front of pack',
+    r.frontOfPack
+      ? `“${r.frontOfPack.text}” (observed ${r.frontOfPack.observedAt})`
+      : 'No front-of-pack figure recorded',
+  ],
+  ...(lp
+    ? ([
+        // Compound/elemental rows only when the label splits them.
+        ...((lp.hasSplit
+          ? [
+              ['Form', lp.form],
+              ['Compound per serving', lp.compound],
+              [
+                'Elemental per serving',
+                lp.elementalBasis
+                  ? `${lp.elemental} (${lp.elementalBasis.toLowerCase()})`
+                  : lp.elemental,
+              ],
+            ]
+          : [['Active', lp.active]]) as Array<[string, string]>),
+        ...(lp.declared ? [['Declared per serving', lp.declared] as [string, string]] : []),
+        ['Serving', lp.serving],
+        ['Servings per pack', lp.servingsPerPack],
+      ] as Array<[string, string]>)
+    : []),
+  [
+    'Observed price',
+    r.price
+      ? `${r.price.pack} on ${r.price.merchant}, ${r.price.observedAt}${r.price.perServing ? ` · ${r.price.perServing} per serving` : ''}`
+      : 'No price observed',
+  ],
+];
+---
+
+<BaseLayout
+  title={`Supplement receipt: ${r.brand} ${r.productName}`}
+  description={`${r.brand} ${r.productName}: what the label declares, what the number means, and the label checks. ${r.meaning}`}
+  canonicalPath={r.href}
+  crumbs={crumbs}
+>
+  <div class="page pt-5">
+    <Breadcrumbs items={crumbs} />
+    {r.isDemo && (
+      <div class="mt-4">
+        <DemoFlag what="This receipt" />
+      </div>
+    )}
+
+    <div class="mt-6 grid gap-10 lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:gap-12">
+      <div>
+        <SupplementReceipt receipt={r} />
+        <div
+          data-receipt-share={r.href}
+          data-slug={r.slug}
+          class="mt-4 flex flex-wrap items-center gap-2"
+        >
+          <button type="button" data-action="copy" class="btn btn-quiet h-10 min-h-10 px-3">
+            Copy link
+          </button>
+          <button type="button" data-action="share" class="btn btn-quiet h-10 min-h-10 px-3" hidden>
+            Share
+          </button>
+          <button type="button" data-action="png" class="btn btn-primary h-10 min-h-10 px-3">
+            Download PNG (1080×1080)
+          </button>
+          <p data-share-status class="caption w-full text-ink-3" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div>
+        <p class="caption text-ink-3">Supplement receipt</p>
+        <h1 class="h1 mt-2">
+          {r.brand} {r.productName}
+        </h1>
+        {r.variant && <p class="mt-1 text-ink-2">{r.variant}</p>}
+        <p class="lede mt-4 max-w-(--container-prose)">{r.meaning}</p>
+        {r.note && (
+          <p class="mt-3 max-w-(--container-prose) border-l-[3px] border-marker pl-3 text-sm text-ink-2">
+            <span class="caption mr-1 text-ink">labels.fyi note</span>
+            {r.note}
+          </p>
+        )}
+
+        <h2 class="caption rule-heavy mt-8 pt-3 text-ink-3">The facts on this receipt</h2>
+        <dl class="mt-2">
+          {facts.map(([k, v]) => (
+            <div class="grid grid-cols-[11rem_1fr] gap-x-4 border-b border-line py-2 text-sm">
+              <dt class="text-ink-3">{k}</dt>
+              <dd class:list={['num', /^(Not disclosed|Not printed|No )/.test(v) && 'text-ink-3']}>
+                {v}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <h2 class="caption rule-heavy mt-8 pt-3 text-ink-3">Label check</h2>
+        <dl class="mt-2">
+          {r.checks.map((c) => (
+            <div class="grid grid-cols-[11rem_1fr] gap-x-4 border-b border-line py-2 text-sm">
+              <dt class="text-ink-3">{c.label}</dt>
+              <dd class:list={['num', c.state === 'not_disclosed' && 'text-ink-3']}>{c.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <h2 class="caption rule-heavy mt-8 pt-3 text-ink-3">Source & evidence</h2>
+        <dl class="mt-2 text-sm">
+          <div class="grid grid-cols-[11rem_1fr] gap-x-4 border-b border-line py-2">
+            <dt class="text-ink-3">Label evidence</dt>
+            <dd>
+              <strong class="font-semibold">{r.evidence.verification}.</strong>{' '}
+              {r.evidence.verificationDetail}
+            </dd>
+          </div>
+          {r.evidence.sourceTitle && (
+            <div class="grid grid-cols-[11rem_1fr] gap-x-4 border-b border-line py-2">
+              <dt class="text-ink-3">Transcribed from</dt>
+              <dd>
+                {r.evidence.sourceKind}: {r.evidence.sourceTitle}
+                {r.evidence.labelCapturedAt && `, captured ${r.evidence.labelCapturedAt}`}
+              </dd>
+            </div>
+          )}
+          <div class="grid grid-cols-[11rem_1fr] gap-x-4 border-b border-line py-2">
+            <dt class="text-ink-3">Reviewed</dt>
+            <dd>
+              {r.evidence.reviewedBy
+                ? `${r.evidence.reviewedBy}${r.evidence.reviewerIsPlaceholder ? ' (placeholder reviewer)' : ''}, ${r.evidence.reviewedAt}`
+                : 'Not yet reviewed'}
+            </dd>
+          </div>
+        </dl>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={r.productHref} class="btn btn-primary">
+            Decode the full label <Icon name="arrow-right" size={14} />
+          </a>
+          <a href="/submit" class="btn btn-quiet">
+            Submit a supplement
+          </a>
+        </div>
+        <p class="mt-4 max-w-(--container-prose) text-xs text-ink-3">
+          Receipts show only what the label declares and what we have verified. Missing information
+          stays missing. Nothing here is a score, ranking or recommendation.
+        </p>
+      </div>
+    </div>
+  </div>
+  <script>
+    import { initReceiptShare } from '@/components/receipt/receipt-share';
+    initReceiptShare();
+  </script>
+</BaseLayout>

@@ -1,0 +1,255 @@
+---
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import type { CompareRow, LabelComparison } from '@/lib/comparison/compare-two';
+import { NOT_DISCLOSED } from '@/lib/comparison/present';
+
+/**
+ * Compare Two Labels. Order of importance: what differs → side by side →
+ * each product's own evidence. Desktop gets a table; mobile gets stacked
+ * blocks (no horizontal scrolling). Facts only: no winner, score or ranking.
+ */
+interface Props {
+  c: LabelComparison;
+}
+const { c } = Astro.props;
+
+const HINT: Record<string, string> = {
+  compound: 'Weight of the whole form',
+  elemental: 'The mineral itself, only when the label declares it',
+  perServing: 'From a dated price observation',
+};
+const muted = (v: string) =>
+  v === NOT_DISCLOSED ||
+  v === 'Not stated' ||
+  v === 'Not printed' ||
+  v === 'No price observed' ||
+  v === 'Not available' ||
+  v === '—';
+const groups: Array<[CompareRow['group'], string]> = [
+  ['identity', 'Identity'],
+  ['serving', 'Serving'],
+  ['actives', 'Actives, per serving'],
+  ['price', 'Commercial observation'],
+  ['evidence', 'Evidence'],
+];
+const sides = [
+  { key: 'a' as const, p: c.a, e: c.evidence.a },
+  { key: 'b' as const, p: c.b, e: c.evidence.b },
+];
+---
+
+<div data-compare={c.path}>
+  {(c.a.isDemo || c.b.isDemo) && (
+    <div class="mb-8">
+      <DemoFlag what="This comparison" />
+    </div>
+  )}
+
+  <!-- 1. What differs -->
+  <section aria-labelledby="differs-h">
+    <SectionHead id="differs" kicker="From the two labels" title="What differs?" />
+    {c.differences.length === 0 ? (
+      <p class="notice-quiet">No differences were found in the compared label facts.</p>
+    ) : (
+      <ol class="grid gap-x-10 md:grid-cols-2" data-differences>
+        {c.differences.map((d) => (
+          <li class="border-t border-ink py-4" data-difference={d.key}>
+            <h3 class="caption text-ink-3">{d.heading}</h3>
+            {d.lines.map((l, i) => (
+              <p class:list={['mt-1.5 text-[0.95rem]', i >= 2 && 'text-sm text-ink-3']}>{l}</p>
+            ))}
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+
+  {c.discrepancies.length > 0 && (
+    <section class="mt-10" aria-labelledby="label-diff-h" data-compare-discrepancies>
+      <h2 id="label-diff-h" class="caption rule-heavy pt-3 text-ink-3">
+        Label difference
+      </h2>
+      {c.discrepancies.map((d) => (
+        <div class="notice mt-3">
+          <p>
+            <strong class="font-semibold text-ink">{d.name}</strong> has{' '}
+            {d.lines.length === 1 ? 'an open discrepancy' : `${d.lines.length} open discrepancies`}:
+          </p>
+          <ul class="mt-1 list-disc pl-5">
+            {d.lines.map((l) => (
+              <li>{l}</li>
+            ))}
+          </ul>
+          <p class="mt-2 text-sm">
+            <a href={d.href} class="link font-medium">
+              See product decoder →
+            </a>
+          </p>
+        </div>
+      ))}
+    </section>
+  )}
+
+  <!-- 2. Side by side -->
+  <section class="mt-14" aria-labelledby="side-h">
+    <SectionHead id="side" kicker="Side by side" title="The two labels" />
+
+    <!-- Desktop / tablet: table -->
+    <table
+      class="facts hidden w-full table-fixed text-left md:table [&_th]:text-left"
+      data-compare-table
+    >
+      <thead>
+        <tr>
+          <th class="w-[24%]">
+            <span class="sr-only">Fact</span>
+          </th>
+          <th>
+            <a href={c.a.href} class="link">
+              {c.a.short}
+            </a>
+          </th>
+          <th>
+            <a href={c.b.href} class="link">
+              {c.b.short}
+            </a>
+          </th>
+        </tr>
+      </thead>
+      {groups.map(([g, label]) => {
+        const rs = c.rows.filter((r) => r.group === g);
+        return (
+          rs.length > 0 && (
+            <tbody>
+              <tr>
+                <th colspan="3" class="caption pt-5 text-ink-3">
+                  {label}
+                </th>
+              </tr>
+              {rs.map((r) => (
+                <tr data-row={r.key}>
+                  <th scope="row" class="align-top font-medium">
+                    {r.label}
+                    {HINT[r.key] && (
+                      <span class="block text-xs font-normal text-ink-3">{HINT[r.key]}</span>
+                    )}
+                    {r.differs && g !== 'identity' && <span class="tag mt-1">Differs</span>}
+                  </th>
+                  {[r.a, r.b].map((vals) => (
+                    <td class="align-top">
+                      {vals.map((v) => (
+                        <span
+                          class:list={[
+                            'block',
+                            r.key === 'compound' || r.key === 'elemental'
+                              ? 'num font-mono text-sm'
+                              : '',
+                            muted(v) && 'text-ink-3 italic',
+                          ]}
+                        >
+                          {v}
+                        </span>
+                      ))}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          )
+        );
+      })}
+    </table>
+
+    <!-- Mobile: stacked blocks, no horizontal scrolling -->
+    <div class="md:hidden" data-compare-stacked>
+      {c.rows
+        .filter((r) => r.group !== 'identity')
+        .map((r) => (
+          <div class="border-t border-line py-3" data-row={r.key}>
+            <p class="caption flex items-center gap-2 text-ink-3">
+              {r.label}
+              {r.differs && <span class="tag">Differs</span>}
+            </p>
+            {HINT[r.key] && <p class="text-xs text-ink-3">{HINT[r.key]}</p>}
+            <dl class="mt-2 grid gap-2">
+              {[
+                [c.a.short, r.a],
+                [c.b.short, r.b],
+              ].map(([name, vals]) => (
+                <div>
+                  <dt class="text-xs font-semibold tracking-wide text-ink-2 uppercase">{name}</dt>
+                  {(vals as string[]).map((v) => (
+                    <dd
+                      class:list={[
+                        'break-words',
+                        r.key === 'compound' || r.key === 'elemental'
+                          ? 'num font-mono text-sm'
+                          : '',
+                        muted(v) && 'text-ink-3 italic',
+                      ]}
+                    >
+                      {v}
+                    </dd>
+                  ))}
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+    </div>
+  </section>
+
+  <!-- 3. Each product's own evidence -->
+  <section class="mt-14" aria-labelledby="evidence-h">
+    <SectionHead id="evidence" kicker="Evidence" title="Where each label’s facts come from" />
+    <div class="grid gap-4 sm:grid-cols-2">
+      {sides.map(({ p, e }) => (
+        <div class="border-2 border-ink bg-sheet p-4" data-evidence>
+          <p class="caption text-ink-3">{p.short}</p>
+          <p class="mt-2 font-semibold">{e.verification}</p>
+          {e.source && <p class="text-sm">{e.source}</p>}
+          {e.labelCapturedAt && (
+            <p class="text-sm text-ink-2">Label captured {e.labelCapturedAt}</p>
+          )}
+          {e.lastPackObservationAt && (
+            <p class="text-sm text-ink-2">Last pack observation {e.lastPackObservationAt}</p>
+          )}
+          <p class="mt-3 flex flex-wrap gap-x-4 text-sm">
+            <a href={p.href} class="link font-medium">
+              Product decoder →
+            </a>
+            <a href={p.receiptHref} class="link">
+              Supplement receipt
+            </a>
+          </p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- 4. Share -->
+  <section class="mt-14 border-t-2 border-ink pt-4" data-compare-share={c.path}>
+    <p class="font-semibold">Comparing two labels?</p>
+    <p class="text-sm text-ink-2">Share this page.</p>
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <button type="button" class="btn btn-quiet" data-action="copy">
+        Copy comparison link
+      </button>
+      <button type="button" class="btn btn-quiet" data-action="share" hidden>
+        Share
+      </button>
+      <span class="text-sm text-ink-3" data-share-status aria-live="polite"></span>
+    </div>
+  </section>
+
+  <p class="mt-10 text-xs text-ink-3">
+    Facts as declared on each label and recorded by labels.fyi. Missing values stay missing.
+    labels.fyi does not score, rank or recommend products.
+  </p>
+</div>
+
+<script>
+  import { initCompareShare } from '@/components/comparison/compare-share';
+  initCompareShare();
+</script>

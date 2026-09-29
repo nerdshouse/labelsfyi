@@ -1,0 +1,161 @@
+---
+import InternalLayout from '@/layouts/InternalLayout.astro';
+import { serverEnv } from '@/lib/server/env';
+import { GOAL_REVIEW_QUERY } from '@/lib/goals/review';
+import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
+
+/** Review product ↔ goal relationships. Protected by the /internal middleware. */
+export const prerender = false;
+
+type Row = {
+  _id: string;
+  status: 'CANDIDATE' | 'APPROVED' | 'REJECTED';
+  basis: string;
+  statement: string | null;
+  sourceUrl: string | null;
+  sourceLocator: string | null;
+  observedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  hasSource: boolean;
+  product: {
+    _id: string;
+    name: string;
+    slug: string;
+    workflowStatus: string;
+    brand: string;
+  } | null;
+  goal: { _id: string; name: string; slug: string; workflowStatus: string } | null;
+};
+let data: { rows: Row[]; goals: Array<{ _id: string; name: string; workflowStatus: string }> } = {
+  rows: [],
+  goals: [],
+};
+let notConfigured: string | null = null;
+try {
+  const store = await getDocStore(await serverEnv());
+  data = await store.query(GOAL_REVIEW_QUERY);
+} catch (e) {
+  if (e instanceof NotConfiguredError) notConfigured = e.message;
+  else throw e;
+}
+const order = { CANDIDATE: 0, APPROVED: 1, REJECTED: 2 };
+const rows = [...data.rows].sort((a, b) => order[a.status] - order[b.status]);
+---
+
+<InternalLayout title="Goal assignments">
+  <h1 class="h2">Product ↔ goal assignments</h1>
+  <p class="mt-2 max-w-3xl text-sm text-ink-2">
+    A product appears on a goal page only once a named reviewer approves a sourced reason.
+    Ingredient matches and brand tags are suggestions. Approving does not publish the product
+    itself: unpublished products never appear.
+  </p>
+  {notConfigured && <p class="notice mt-4">{notConfigured}</p>}
+  <div class="mt-6 overflow-x-auto">
+    <table class="facts w-full min-w-[48rem] text-sm">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Goal</th>
+          <th>Basis &amp; source</th>
+          <th>Status</th>
+          <th>Decide</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colspan="5" class="text-ink-3">
+              No relationships yet.
+            </td>
+          </tr>
+        )}
+        {rows.map((r) => (
+          <tr data-goal-row={r._id} data-status={r.status}>
+            <td class="align-top">
+              {r.product ? `${r.product.brand} · ${r.product.name}` : '—'}
+              {r.product && r.product.workflowStatus !== 'PUBLISHED' && (
+                <span class="tag ml-1">{r.product.workflowStatus}</span>
+              )}
+            </td>
+            <td class="align-top">
+              {r.goal?.name ?? '—'}
+              {r.goal && r.goal.workflowStatus !== 'PUBLISHED' && (
+                <span class="tag ml-1">{r.goal.workflowStatus}</span>
+              )}
+            </td>
+            <td class="align-top">
+              <span class="tag">{r.basis}</span>
+              {r.statement && <span class="block">“{r.statement}”</span>}
+              <span class="block text-xs text-ink-3">
+                {r.sourceLocator ?? ''}
+                {r.sourceUrl && (
+                  <>
+                    {' '}
+                    <a
+                      href={r.sourceUrl}
+                      class="link"
+                      rel="noopener noreferrer nofollow"
+                      target="_blank"
+                    >
+                      source
+                    </a>
+                  </>
+                )}
+                {!r.hasSource && <strong class="text-alert"> no source</strong>}
+              </span>
+            </td>
+            <td class="align-top">
+              <span class="tag tag-ink">{r.status}</span>
+              {r.reviewedBy && <span class="block text-xs text-ink-3">{r.reviewedBy}</span>}
+            </td>
+            <td class="align-top">
+              <form method="post" action="/internal/goals/decide" class="grid gap-1">
+                <input type="hidden" name="id" value={r._id} />
+                <input
+                  name="reviewer"
+                  required
+                  placeholder="Your name"
+                  class="h-8 border border-ink bg-paper px-2"
+                />
+                {r.status === 'CANDIDATE' && (
+                  <>
+                    <button name="action" value="approve" class="btn btn-primary min-h-8">
+                      Approve
+                    </button>
+                    <div class="flex gap-1">
+                      <select
+                        name="goalId"
+                        class="h-8 min-w-0 flex-1 border border-ink bg-paper px-1"
+                      >
+                        {data.goals
+                          .filter((g) => g._id !== r.goal?._id)
+                          .map((g) => (
+                            <option value={g._id}>
+                              {g.name}
+                              {g.workflowStatus !== 'PUBLISHED' ? ` (${g.workflowStatus})` : ''}
+                            </option>
+                          ))}
+                      </select>
+                      <button name="action" value="change" class="btn btn-quiet min-h-8">
+                        Change goal
+                      </button>
+                    </div>
+                  </>
+                )}
+                <input
+                  name="reason"
+                  placeholder="Reason (to reject)"
+                  class="h-8 border border-ink bg-paper px-2"
+                />
+                <button name="action" value="reject" class="btn btn-quiet min-h-8">
+                  Reject
+                </button>
+              </form>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</InternalLayout>

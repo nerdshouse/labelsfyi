@@ -1,0 +1,360 @@
+---
+import SearchBox from '@/components/search/SearchBox.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { analyseUrl, candidateDocuments, type AnalysisResult } from '@/lib/analyse/analyse';
+import { catalogueContext, type CatalogueContext } from '@/lib/analyse/catalogue';
+import { loadCatalogueIndex } from '@/lib/comparison/facts-source';
+import { formatDate } from '@/lib/formatting/dates';
+import { formatMoney } from '@/lib/formatting/money';
+import { SOURCES } from '@/lib/sources/policy';
+
+/**
+ * "Check a supplement": paste a product URL, see what the page states, and
+ * optionally send it for verification. On-demand (Worker). Actions are POST
+ * only (no crawler can trigger an outbound fetch), rate-limited, and every
+ * result is noindex. Nothing here is ever published: submissions become
+ * private, unverified candidates for human review.
+ */
+export const prerender = false;
+
+type State = 'EMPTY' | AnalysisResult['state'] | 'CANDIDATE_CREATED' | 'RATE_LIMITED' | 'NOT_OPEN';
+
+let state: State = 'EMPTY';
+let result: AnalysisResult | null = null;
+let context: CatalogueContext | null = null;
+let input = '';
+
+if (Astro.request.method === 'POST') {
+  Astro.response.headers.set('Cache-Control', 'no-store');
+  const fd = await Astro.request.formData();
+  input = String(fd.get('url') ?? '').slice(0, 2100);
+  const action = fd.get('action') === 'submit' ? 'submit' : 'analyse';
+  const { serverEnv } = await import('@/lib/server/env');
+  const env = await serverEnv();
+  const limiter = env.ANALYSE_RATE_LIMITER;
+  const allowed = limiter
+    ? (await limiter.limit({ key: Astro.clientAddress ?? 'unknown' })).success
+    : true;
+  if (!allowed) {
+    state = 'RATE_LIMITED';
+    Astro.response.status = 429;
+  } else {
+    // Always re-analyse on the server: never trust facts posted back by the browser.
+    result = await analyseUrl(input);
+    state = result.state;
+    if (result.extraction)
+      context = catalogueContext(result.extraction, await loadCatalogueIndex(Astro.url));
+    if (action === 'submit' && (state === 'EXTRACTION_SUCCESS' || state === 'EXTRACTION_PARTIAL')) {
+      try {
+        const [{ getDocStore }, { IDENTITY_QUERY, identityRecords }] = await Promise.all([
+          import('@/lib/submissions/store-factory'),
+          import('@/lib/submissions/review'),
+        ]);
+        const store = await getDocStore(env);
+        const policy = SOURCES.find((s) => s.id === result!.policy!.id)!;
+        const stamp = `${Date.now().toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0]!.toString(36)}`;
+        const docs = candidateDocuments(
+          result,
+          policy,
+          identityRecords(await store.query(IDENTITY_QUERY)),
+          stamp,
+        );
+        const existingSource = await store.get(docs.dataSource._id as string);
+        await store.commit([
+          ...(existingSource ? [] : [{ create: docs.dataSource as never }]),
+          { create: docs.snapshot as never },
+          { create: docs.candidate as never },
+        ]);
+        state = 'CANDIDATE_CREATED';
+      } catch (e) {
+        if ((e as Error)?.name === 'NotConfiguredError') {
+          state = 'NOT_OPEN';
+          Astro.response.status = 503;
+        } else throw e;
+      }
+    }
+  }
+}
+const x = result?.extraction ?? null;
+const SOURCE_LABEL = {
+  BRAND_WEBSITE: 'Brand product page',
+  MARKETPLACE: 'Marketplace listing',
+  OTHER: 'Web page',
+} as const;
+const sourceLabel = result?.policy ? SOURCE_LABEL[result.policy.sourceKind] : null;
+const showFacts =
+  state === 'EXTRACTION_SUCCESS' || state === 'EXTRACTION_PARTIAL' || state === 'CANDIDATE_CREATED';
+---
+
+<BaseLayout
+  title="Check a supplement"
+  description="Paste a supplement product URL to see what the product page states, what is missing, and how it compares with verified labels on labels.fyi."
+  canonicalPath="/analyse"
+  noindex={state !== 'EMPTY'}
+>
+  <div class="page max-w-3xl pt-8" data-analyse-state={state}>
+    <p class="caption text-ink-3">Check a supplement</p>
+    <h1 class="h1 mt-2">What does this product page actually state?</h1>
+    <p class="lede mt-3">
+      Paste a product URL. We read the facts the page states (ingredients, amounts, serving, price)
+      and show what is missing. Nothing is verified until someone checks the actual label.
+    </p>
+
+    <form method="post" action="/analyse" class="mt-6 flex flex-wrap gap-2" data-analyse-form>
+      <label for="analyse-url" class="sr-only">
+        Product URL
+      </label>
+      <input
+        id="analyse-url"
+        name="url"
+        type="url"
+        inputmode="url"
+        required
+        maxlength="2048"
+        value={input}
+        placeholder="https://brand.example/products/…"
+        class="h-12 min-w-0 flex-1 border-2 border-ink bg-sheet px-3"
+      />
+      <input type="hidden" name="action" value="analyse" />
+      <button class="btn btn-primary h-12">Analyse product</button>
+    </form>
+    <p class="mt-2 text-xs text-ink-3">
+      We only read sources whose terms allow it, never download images, and never copy product
+      descriptions.{' '}
+      <a href="/methodology" class="link">
+        How this works
+      </a>
+    </p>
+
+    {state === 'RATE_LIMITED' && (
+      <p class="notice mt-8" role="alert">
+        Too many checks from this connection. Please wait a minute and try again.
+      </p>
+    )}
+    {state === 'INVALID_URL' && (
+      <p class="notice mt-8" role="alert">
+        {result?.message}
+      </p>
+    )}
+    {state === 'ERROR' && (
+      <p class="notice mt-8" role="alert">
+        We couldn’t read that page: {result?.message}
+      </p>
+    )}
+
+    {state === 'SOURCE_NOT_ALLOWED' && (
+      <section class="mt-8 border-2 border-ink bg-sheet p-4" role="alert" data-source-not-allowed>
+        <p class="text-lg font-semibold">{result?.message}</p>
+        <p class="mt-2 text-sm text-ink-2">
+          {result?.policy
+            ? `${result.policy.name}'s terms don’t permit automated reading of its pages, so we don’t fetch them.`
+            : 'This website is not one we have permission to read automatically.'}{' '}
+          You can still add the product:
+        </p>
+        <p class="mt-3 flex flex-wrap gap-3">
+          <a href="/submit" class="btn btn-primary">
+            Upload the label
+          </a>
+          <a href="/submit" class="btn btn-quiet">
+            Submit the product manually
+          </a>
+        </p>
+      </section>
+    )}
+
+    {state === 'NOTHING_FOUND' && (
+      <section class="mt-8 border-2 border-ink bg-sheet p-4" role="status">
+        <p class="font-semibold">{result?.message}</p>
+        <p class="mt-2 text-sm">
+          <a href="/submit" class="link">
+            Send us the front and back of the label
+          </a>{' '}
+          instead.
+        </p>
+      </section>
+    )}
+
+    {state === 'NOT_OPEN' && (
+      <p class="notice mt-8" role="alert">
+        Verification submissions are not open yet. Nothing was saved.
+      </p>
+    )}
+
+    {showFacts && x && result?.provenance && (
+      <section class="mt-8" aria-labelledby="found-h" data-extraction>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="found-h" class="h2">
+            {state === 'EXTRACTION_PARTIAL' ? 'Product found, some facts missing' : 'What we found'}
+          </h2>
+          <span class="tag tag-marker" data-unverified>
+            Unverified
+          </span>
+        </div>
+        <p class="mt-1 text-sm text-ink-2">
+          Source: {sourceLabel} · observed {formatDate(result.provenance.observedAt)} ·{' '}
+          <a
+            href={result.provenance.sourceUrl}
+            class="link"
+            rel="nofollow noopener noreferrer"
+            target="_blank"
+          >
+            page
+          </a>
+          . These are the page’s own statements, not a verified label.
+        </p>
+        <dl class="mt-4 grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 border-t-2 border-ink pt-3 text-sm">
+          <dt class="text-ink-3">Brand</dt>
+          <dd>{x.brand ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
+          <dt class="text-ink-3">Product</dt>
+          <dd class="font-semibold">{x.name}</dd>
+          <dt class="text-ink-3">Serving</dt>
+          <dd>{x.serving ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
+          <dt class="text-ink-3">Servings per pack</dt>
+          <dd>{x.servingsPerContainer ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
+          <dt class="text-ink-3">Ingredients</dt>
+          <dd>
+            {x.ingredients.length ? (
+              <ul data-extracted-ingredients>
+                {x.ingredients.map((i) => (
+                  <li>
+                    {i.label} — <span class="num font-mono">{i.value}</span>
+                    {i.elementalStated && <span class="tag ml-1">stated as elemental</span>}
+                    <span class="text-xs text-ink-3"> ({i.where.toLowerCase()})</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span class="text-ink-3 italic">No amounts stated on the page</span>
+            )}
+          </dd>
+          <dt class="text-ink-3">Observed price</dt>
+          <dd>
+            {x.price ? (
+              <span class="num font-mono">
+                {formatMoney({ amount: x.price.amount, currency: x.price.currency as 'INR' })}
+              </span>
+            ) : (
+              <span class="text-ink-3 italic">Not stated</span>
+            )}
+          </dd>
+          <dt class="text-ink-3">Barcode</dt>
+          <dd>{x.gtin ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
+          <dt class="text-ink-3">Veg</dt>
+          <dd>
+            {x.vegStatement ? (
+              `“${x.vegStatement}” (page statement)`
+            ) : (
+              <span class="text-ink-3 italic">Not stated</span>
+            )}
+          </dd>
+          <dt class="text-ink-3">Images</dt>
+          <dd class="text-ink-3">{x.imagesSeen ? 'Label image not collected.' : 'None.'}</dd>
+        </dl>
+
+        {result.missing && result.missing.length > 0 && (
+          <div class="mt-5">
+            <h3 class="caption text-ink-3">What is missing</h3>
+            <ul class="mt-1 list-[square] pl-5 text-sm" data-missing>
+              {result.missing.map((m) => (
+                <li>{m}</li>
+              ))}
+            </ul>
+            <p class="mt-2 text-xs text-ink-3">
+              We never calculate a missing amount (for example elemental magnesium from a compound
+              weight).
+            </p>
+          </div>
+        )}
+
+        {context && (context.possibleSame.length > 0 || context.ingredients.length > 0) && (
+          <div class="mt-6 border-t border-ink pt-3" data-catalogue-context>
+            <h3 class="font-semibold">Compare with the catalogue</h3>
+            {context.possibleSame.length > 0 && (
+              <p class="mt-1 text-sm">
+                Possibly already on labels.fyi (not confirmed):{' '}
+                {context.possibleSame.map((m, i) => (
+                  <>
+                    {i > 0 && ' · '}
+                    <a href={`/products/${m.slug}`} class="link">
+                      {m.brand} {m.name}
+                    </a>{' '}
+                    <span class="text-xs text-ink-3">
+                      ({m.level.toLowerCase().replace(/_/g, ' ')})
+                    </span>
+                  </>
+                ))}
+              </p>
+            )}
+            {context.ingredients.length > 0 && (
+              <p class="mt-1 text-sm">
+                Verified products with the same ingredient:{' '}
+                {context.ingredients.map((i, n) => (
+                  <>
+                    {n > 0 && ' · '}
+                    <a href={`/supplements/${i.slug}`} class="link" data-compare-catalogue>
+                      {i.name} ({i.count})
+                    </a>
+                  </>
+                ))}
+              </p>
+            )}
+            <p class="mt-1 text-xs text-ink-3">
+              This product can be compared side by side once its label is verified.
+            </p>
+          </div>
+        )}
+
+        {state === 'CANDIDATE_CREATED' ? (
+          <p class="notice mt-6" role="status" data-candidate-created>
+            <strong class="font-semibold text-ink">Sent for verification.</strong> It is not
+            published. Our team checks the actual label before anything appears on labels.fyi.
+          </p>
+        ) : (
+          <form method="post" action="/analyse" class="mt-6" data-submit-candidate>
+            <input type="hidden" name="url" value={result.url} />
+            <input type="hidden" name="action" value="submit" />
+            <button class="btn btn-primary">Submit for verification</button>
+            <p class="mt-2 text-xs text-ink-3">
+              Saves the page address and the facts above as a private, unverified entry for our team
+              (
+              <a href="/privacy" class="link">
+                privacy
+              </a>
+              ). Better still:{' '}
+              <a href="/submit" class="link">
+                send the front and back of the label
+              </a>
+              .
+            </p>
+          </form>
+        )}
+      </section>
+    )}
+
+    <section class="mt-14 border-t-2 border-ink pt-4 text-sm">
+      <p class="font-semibold">Don’t have a URL?</p>
+      <p class="text-ink-2">Search what is already decoded, or send us the label.</p>
+      <div class="mt-3 max-w-xl">
+        <SearchBox variant="page" id="analyse-search" />
+      </div>
+      <p class="mt-3">
+        <a href="/submit" class="link">
+          Don’t see your supplement? Send us the front and back of the label.
+        </a>
+      </p>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import { track } from '@/lib/analytics/events';
+  const root = document.querySelector<HTMLElement>('[data-analyse-state]');
+  const s = root?.dataset.analyseState;
+  if (s && s !== 'EMPTY') track('analyse_result', { state: s });
+  document
+    .querySelector('[data-analyse-form]')
+    ?.addEventListener('submit', () => track('analyse_url'));
+  document
+    .querySelector('[data-submit-candidate]')
+    ?.addEventListener('submit', () => track('submit_verification', { from: 'analyse' }));
+</script>

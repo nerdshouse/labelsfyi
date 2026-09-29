@@ -1,6 +1,7 @@
 ---
 import Icon from '@/components/ui/Icon.astro';
 import type { LabelIngredientRow, LabelPanelData } from '@/lib/content/types';
+import { panelEvidence } from '@/lib/editorial/evidence';
 import { PANEL_TYPE } from '@/lib/editorial/meta';
 import { formatDate } from '@/lib/formatting/dates';
 import { formatAmount, formatNumber, formatQuantity } from '@/lib/formatting/quantity';
@@ -16,6 +17,15 @@ interface Props {
   sourceNumber?: number | undefined;
 }
 const { panel, sourceNumber } = Astro.props;
+// Readers see what the transcription is based on; artwork is provisional evidence.
+const EVIDENCE_LABEL = {
+  strong:
+    panel.sourceType === 'BRAND_SUPPLIED_LABEL'
+      ? 'From brand-supplied label file'
+      : 'From the pack',
+  provisional: 'From label artwork (provisional)',
+  rejected: 'Unverified',
+} as const;
 const isFacts = panel.panelType === 'nutrition' || panel.panelType === 'supplement_facts';
 const hasPer100 = panel.per100Basis !== null && panel.nutrients.some((n) => n.per100 !== null);
 const hasDv = panel.nutrients.some((n) => n.dailyValuePercent !== null);
@@ -199,7 +209,8 @@ const hasAmounts = panel.ingredients.some((r) => r.amountPerServing !== null);
 
   <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-ink px-3 py-2 text-xs text-ink-3 sm:px-4">
     <span class="num">
-      Captured <time datetime={panel.capturedAt}>{formatDate(panel.capturedAt)}</time>
+      {EVIDENCE_LABEL[panelEvidence(panel)]} · Captured{' '}
+      <time datetime={panel.capturedAt}>{formatDate(panel.capturedAt)}</time>
       {panel.source && (
         <>
           {' · '}

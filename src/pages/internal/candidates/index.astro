@@ -1,0 +1,97 @@
+---
+import InternalLayout from '@/layouts/InternalLayout.astro';
+import { serverEnv } from '@/lib/server/env';
+import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
+
+/**
+ * Unverified candidates from the URL analyser and research imports.
+ * Read-only here; verification happens in Studio / the review pipeline.
+ * Protected by the /internal middleware.
+ */
+export const prerender = false;
+
+type Row = {
+  _id: string;
+  title: string;
+  sourceUrl: string | null;
+  extractor: string | null;
+  extractedAt: string | null;
+  status: string;
+  matchStatus: string;
+  facts: Array<{
+    field: string;
+    label?: string;
+    value: string;
+    method: string;
+    verificationStatus: string;
+  }>;
+  possible: Array<{ level: string; name: string | null }>;
+};
+let rows: Row[] = [];
+let notConfigured: string | null = null;
+try {
+  const store = await getDocStore(await serverEnv());
+  rows = await store.query<
+    Row[]
+  >(`*[_type == "ingestionCandidate" && !defined(submission)] | order(extractedAt desc)[0...200] {
+    _id, title, sourceUrl, extractor, extractedAt, status, matchStatus,
+    "facts": coalesce(facts[]{ field, label, value, method, verificationStatus }, []),
+    "possible": coalesce(possibleMatches[]{ level, "name": product->name }, [])
+  }`);
+} catch (e) {
+  if (e instanceof NotConfiguredError) notConfigured = e.message;
+  else throw e;
+}
+---
+
+<InternalLayout title="Candidates">
+  <h1 class="h2">Unverified candidates</h1>
+  <p class="mt-2 max-w-3xl text-sm text-ink-2">
+    From the URL analyser and permitted research imports. Nothing here is public. Facts become label
+    facts only after someone verifies them against the actual label.
+  </p>
+  {notConfigured && <p class="notice mt-4">{notConfigured}</p>}
+  <ul class="mt-6 space-y-4">
+    {rows.length === 0 && <li class="text-ink-3">No candidates.</li>}
+    {rows.map((r) => (
+      <li class="border-2 border-ink bg-sheet p-3 text-sm" data-candidate={r._id}>
+        <p class="font-semibold">{r.title}</p>
+        <p class="text-xs text-ink-3">
+          {r.extractor} · {r.extractedAt?.slice(0, 16).replace('T', ' ')} · {r.status} ·{' '}
+          {r.matchStatus}
+          {r.sourceUrl && (
+            <>
+              {' · '}
+              <a href={r.sourceUrl} class="link" rel="noopener noreferrer nofollow" target="_blank">
+                source
+              </a>
+            </>
+          )}
+        </p>
+        <table class="facts mt-2 w-full text-xs">
+          <tbody>
+            {r.facts.map((f) => (
+              <tr>
+                <td>
+                  {f.field}
+                  {f.label ? ` · ${f.label}` : ''}
+                </td>
+                <td class="font-mono">{f.value}</td>
+                <td>{f.method}</td>
+                <td>
+                  <span class="tag">{f.verificationStatus}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {r.possible.length > 0 && (
+          <p class="mt-1 text-xs">
+            Possible matches (unconfirmed):{' '}
+            {r.possible.map((p) => `${p.name} (${p.level})`).join(', ')}
+          </p>
+        )}
+      </li>
+    ))}
+  </ul>
+</InternalLayout>

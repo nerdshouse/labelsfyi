@@ -1,0 +1,353 @@
+---
+import type { Receipt } from '@/lib/receipt/receipt';
+
+/**
+ * The Supplement Receipt: a fixed 1080×1080 design. Every size is a multiple
+ * of --u (1080 units across the frame), so the same markup scales to any
+ * screen and exports to exactly 1080×1080 px when --u is pinned to 1px.
+ */
+interface Props {
+  receipt: Receipt;
+}
+const { receipt: r } = Astro.props;
+const lp = r.labelPanel;
+const nd = (v: string | null | undefined) => !v || v === 'Not disclosed' || v === 'Not printed';
+---
+
+<div class="receipt-frame">
+  <article
+    class="receipt"
+    data-receipt={r.slug}
+    aria-label={`Supplement receipt for ${r.brand} ${r.productName}`}
+  >
+    <header class="r-top">
+      <span class="r-brandmark">
+        labels<b>.fyi</b>
+      </span>
+      <span>Supplement receipt</span>
+    </header>
+
+    {r.isDemo && <p class="r-demo">Demo data · fictional product · not a real SKU</p>}
+
+    <section class="r-title">
+      <p class="r-cap">{r.brand}</p>
+      <h2 class="r-name">{r.productName}</h2>
+      {r.variant && <p class="r-variant">{r.variant}</p>}
+    </section>
+
+    <div class="r-grid">
+      <section class="r-box">
+        <p class="r-cap">Front of pack</p>
+        {r.frontOfPack ? (
+          <>
+            <p class="r-front">“{r.frontOfPack.text}”</p>
+            <p class="r-meta">Observed {r.frontOfPack.observedAt}</p>
+          </>
+        ) : (
+          <p class="r-muted">No front-of-pack figure recorded</p>
+        )}
+      </section>
+      <section class="r-box">
+        <p class="r-cap">Label panel</p>
+        <dl class="r-kv">
+          <div>
+            <dt>Serving</dt>
+            <dd>{lp?.serving ?? 'Not disclosed'}</dd>
+          </div>
+          <div>
+            <dt>Servings / pack</dt>
+            <dd class:list={[nd(lp?.servingsPerPack) && 'r-nd']}>
+              {lp?.servingsPerPack ?? 'Not printed'}
+            </dd>
+          </div>
+          {lp?.hasSplit ? (
+            <div>
+              <dt>Form</dt>
+              <dd class:list={[nd(lp.form) && 'r-nd']}>{lp.form}</dd>
+            </div>
+          ) : lp ? (
+            <div>
+              <dt>Active</dt>
+              <dd>{lp.active}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </section>
+    </div>
+
+    <section class="r-declares">
+      <p class="r-cap">The label declares · per serving</p>
+      {lp && lp.declared && !lp.hasSplit ? (
+        <p class="r-big">
+          <span class="r-mark">{lp.declared}</span>
+        </p>
+      ) : lp ? (
+        <dl class="r-amounts">
+          <div>
+            <dt>Compound</dt>
+            <dd class:list={[nd(lp.compound) && 'r-nd']}>{lp.compound}</dd>
+          </div>
+          <div>
+            <dt>Elemental</dt>
+            <dd class:list={[nd(lp.elemental) && 'r-nd']}>
+              {nd(lp.elemental) ? lp.elemental : <span class="r-mark">{lp.elemental}</span>}
+            </dd>
+          </div>
+        </dl>
+      ) : (
+        <p class="r-muted">No amounts disclosed</p>
+      )}
+    </section>
+
+    <section class="r-means">
+      <p class="r-cap">What this number means</p>
+      <p class="r-meaning">{r.meaning}</p>
+    </section>
+
+    <section class="r-checks">
+      <p class="r-cap">Label check</p>
+      <ul>
+        {r.checks.map((c) => (
+          <li>
+            <span>{c.label}</span>
+            <span class:list={[c.state === 'not_disclosed' && 'r-nd']}>{c.value}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="r-foot">
+      <p>
+        <b>{r.evidence.verification}</b>
+        {r.evidence.sourceKind && ` · ${r.evidence.sourceKind}`}
+        {r.evidence.labelCapturedAt && ` · label captured ${r.evidence.labelCapturedAt}`}
+        {r.evidence.reviewedBy &&
+          ` · reviewed by ${r.evidence.reviewedBy}${r.evidence.reviewerIsPlaceholder ? ' (placeholder)' : ''}`}
+      </p>
+      {r.price && (
+        <p>
+          Observed {r.price.pack} on {r.price.merchant}, {r.price.observedAt}
+          {r.price.perServing && ` · ${r.price.perServing} per serving`}
+        </p>
+      )}
+      <p class="r-url">labels.fyi{r.href}</p>
+    </footer>
+  </article>
+</div>
+
+<style>
+  .receipt-frame {
+    container-type: inline-size;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 1px solid var(--color-ink);
+  }
+  .receipt {
+    --u: calc(100cqw / 1080);
+    width: calc(1080 * var(--u));
+    height: calc(1080 * var(--u));
+    display: flex;
+    flex-direction: column;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: calc(24 * var(--u));
+    line-height: 1.3;
+    padding: 0 calc(56 * var(--u)) calc(40 * var(--u));
+    overflow: hidden;
+  }
+  /* Export mode: pin the design to exactly 1080×1080 px. */
+  :global(.receipt.is-exporting) {
+    --u: 1px;
+  }
+  .r-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0 calc(-56 * var(--u));
+    padding: calc(18 * var(--u)) calc(56 * var(--u));
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-mono);
+    font-size: calc(20 * var(--u));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .r-brandmark {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    font-size: calc(28 * var(--u));
+  }
+  .r-brandmark b {
+    margin-left: calc(2 * var(--u));
+    padding: 0 calc(6 * var(--u));
+    background: var(--color-marker);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  .r-demo {
+    margin: 0 calc(-56 * var(--u));
+    padding: calc(8 * var(--u)) calc(56 * var(--u));
+    background: var(--color-marker);
+    font-family: var(--font-mono);
+    font-size: calc(18 * var(--u));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .r-cap {
+    font-family: var(--font-mono);
+    font-size: calc(17 * var(--u));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .r-title {
+    padding: calc(26 * var(--u)) 0 calc(18 * var(--u));
+    border-bottom: calc(8 * var(--u)) solid var(--color-ink);
+  }
+  .r-name {
+    margin-top: calc(6 * var(--u));
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: calc(54 * var(--u));
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .r-variant {
+    margin-top: calc(4 * var(--u));
+    font-size: calc(24 * var(--u));
+    color: var(--color-ink-2);
+  }
+  .r-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: calc(24 * var(--u));
+    padding: calc(20 * var(--u)) 0;
+    border-bottom: calc(2 * var(--u)) solid var(--color-ink);
+  }
+  .r-front {
+    margin-top: calc(8 * var(--u));
+    display: inline-block;
+    border: calc(3 * var(--u)) solid var(--color-ink);
+    padding: calc(6 * var(--u)) calc(12 * var(--u));
+    font-weight: 800;
+    font-size: calc(28 * var(--u));
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .r-meta,
+  .r-muted {
+    margin-top: calc(8 * var(--u));
+    font-size: calc(19 * var(--u));
+    color: var(--color-ink-3);
+  }
+  .r-kv {
+    margin-top: calc(6 * var(--u));
+  }
+  .r-kv div,
+  .r-checks li {
+    display: flex;
+    justify-content: space-between;
+    gap: calc(16 * var(--u));
+    padding: calc(5 * var(--u)) 0;
+    border-bottom: calc(1 * var(--u)) solid var(--color-line);
+  }
+  .r-kv dt {
+    color: var(--color-ink-3);
+  }
+  .r-kv dd,
+  .r-checks li span:last-child {
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+  .r-declares {
+    padding: calc(18 * var(--u)) 0;
+    border-bottom: calc(2 * var(--u)) solid var(--color-ink);
+  }
+  .r-amounts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: calc(24 * var(--u));
+    margin-top: calc(8 * var(--u));
+  }
+  .r-amounts dt {
+    font-family: var(--font-mono);
+    font-size: calc(18 * var(--u));
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .r-amounts dd,
+  .r-big {
+    margin-top: calc(4 * var(--u));
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: calc(34 * var(--u));
+    line-height: 1.15;
+  }
+  .r-mark {
+    background: linear-gradient(
+      to bottom,
+      transparent 8%,
+      var(--color-marker) 8%,
+      var(--color-marker) 92%,
+      transparent 92%
+    );
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0 calc(4 * var(--u));
+  }
+  .r-nd {
+    color: var(--color-ink-3);
+    font-weight: 400;
+  }
+  .r-means {
+    padding: calc(16 * var(--u)) 0;
+    border-bottom: calc(2 * var(--u)) solid var(--color-ink);
+  }
+  .r-meaning {
+    margin-top: calc(6 * var(--u));
+    font-family: var(--font-serif);
+    font-size: calc(28 * var(--u));
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .r-checks {
+    flex: 1;
+    min-height: 0;
+    padding-top: calc(14 * var(--u));
+    overflow: hidden;
+  }
+  .r-checks ul {
+    margin-top: calc(4 * var(--u));
+    columns: 2;
+    column-gap: calc(32 * var(--u));
+    font-size: calc(20 * var(--u));
+  }
+  .r-checks li {
+    break-inside: avoid;
+  }
+  .r-foot {
+    padding-top: calc(12 * var(--u));
+    border-top: calc(8 * var(--u)) solid var(--color-ink);
+    font-size: calc(18 * var(--u));
+    color: var(--color-ink-2);
+  }
+  .r-foot p + p {
+    margin-top: calc(4 * var(--u));
+  }
+  .r-url {
+    font-family: var(--font-mono);
+    color: var(--color-ink);
+  }
+</style>

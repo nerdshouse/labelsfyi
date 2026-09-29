@@ -1,6 +1,11 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
 import {
+  ACCESS_MODE,
   CANDIDATE_STATUS,
+  PRODUCT_GOAL_BASIS,
+  DEPICTS,
+  IMAGE_KIND,
+  MATCH_LEVEL,
   DATA_SOURCE_TYPE,
   EXTRACTED_FIELD,
   EXTRACTION_METHOD,
@@ -10,6 +15,7 @@ import {
   UNITS,
   VERIFICATION_STATUS,
 } from '../../lib/constants';
+import { gtinValidation } from '../../lib/gtin';
 import { lockedAfterWindow } from '../../lib/validation';
 
 /**
@@ -24,6 +30,11 @@ import { lockedAfterWindow } from '../../lib/validation';
  * `source` type is a *citation* (a specific study, label capture or page),
  * and is unchanged.
  */
+
+const requiredUnlessSubmission = (v: unknown, ctx: { document?: unknown }) =>
+  v || (ctx.document as { submission?: unknown } | undefined)?.submission
+    ? true
+    : 'Required for candidates collected from a website.';
 
 export const dataSource = defineType({
   name: 'dataSource',
@@ -78,6 +89,26 @@ export const dataSource = defineType({
             : true,
         ),
     }),
+    defineField({
+      name: 'accessMode',
+      type: 'string',
+      options: { list: ACCESS_MODE },
+      initialValue: 'MANUAL_RESEARCH',
+      description: 'How this source may be used. Automated collection needs explicit permission.',
+      validation: (r) =>
+        r.custom((v, ctx) =>
+          v === 'NOT_PERMITTED' && (ctx.document as { active?: boolean })?.active
+            ? 'A source whose terms do not permit use cannot be active.'
+            : true,
+        ),
+    }),
+    defineField({ name: 'termsReviewedAt', type: 'datetime' }),
+    defineField({
+      name: 'termsSummary',
+      type: 'text',
+      rows: 3,
+      description: 'Short excerpts of the terms that decide the access mode.',
+    }),
     defineField({ name: 'notes', type: 'text', rows: 2 }),
     defineField({ name: 'isDemo', type: 'boolean', initialValue: false }),
   ],
@@ -109,6 +140,39 @@ export const snapshotImage = defineType({
       description: 'Object-storage key of our archived copy, if any.',
     }),
     defineField({ name: 'contentHash', type: 'string' }),
+    defineField({
+      name: 'galleryPosition',
+      type: 'number',
+      description: 'Position on the page. Not proof of which product it shows.',
+    }),
+    defineField({
+      name: 'imageKind',
+      type: 'string',
+      options: { list: IMAGE_KIND },
+      initialValue: 'UNKNOWN',
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'depictsExactProduct',
+      type: 'string',
+      options: { list: DEPICTS, layout: 'radio' },
+      initialValue: 'UNCONFIRMED',
+      description:
+        'A person confirms by reading the pack name, variant and size in the image. Filenames and gallery positions are not proof.',
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'depictsConfirmedBy',
+      type: 'string',
+      validation: (r) =>
+        r.custom((v, ctx) =>
+          (ctx.parent as { depictsExactProduct?: string })?.depictsExactProduct !== 'UNCONFIRMED' &&
+          !v
+            ? 'Name the person who checked what this image depicts.'
+            : true,
+        ),
+    }),
+    defineField({ name: 'depictsConfirmedAt', type: 'datetime' }),
     defineField({
       name: 'role',
       type: 'string',
@@ -291,6 +355,11 @@ export const extractedFact = defineType({
     defineField({ name: 'amount', title: 'Parsed amount', type: 'number' }),
     defineField({ name: 'unit', title: 'Parsed unit', type: 'string', options: { list: UNITS } }),
     defineField({
+      name: 'sourceLocator',
+      type: 'string',
+      description: 'Where on the source, e.g. "statutory details block", "gallery image 9".',
+    }),
+    defineField({
       name: 'method',
       type: 'string',
       options: { list: EXTRACTION_METHOD },
@@ -372,7 +441,18 @@ export const possibleMatch = defineType({
       type: 'string',
       description: 'e.g. "Same brand, name and pack size; different flavour".',
     }),
-    defineField({ name: 'score', type: 'number', validation: (r) => r.min(0).max(1) }),
+    defineField({
+      name: 'level',
+      type: 'string',
+      options: { list: MATCH_LEVEL },
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'relation',
+      type: 'string',
+      description: 'e.g. same_sku, pack_size_variant, flavour_variant, possible_reformulation.',
+    }),
+    defineField({ name: 'reasons', type: 'array', of: [defineArrayMember({ type: 'string' })] }),
   ],
   preview: { select: { title: 'product.name', subtitle: 'reason' } },
 });
@@ -391,19 +471,37 @@ export const ingestionCandidate = defineType({
       validation: (r) => r.required(),
     }),
     defineField({
+      name: 'submission',
+      title: 'Label submission',
+      type: 'reference',
+      to: [{ type: 'labelSubmission' }],
+      readOnly: true,
+      description: 'Set when this candidate came from /submit rather than a website.',
+    }),
+    defineField({
       name: 'dataSource',
       type: 'reference',
       to: [{ type: 'dataSource' }],
-      validation: (r) => r.required(),
+      validation: (r) => r.custom(requiredUnlessSubmission),
     }),
     defineField({
       name: 'snapshot',
       type: 'reference',
       to: [{ type: 'sourceSnapshot' }],
-      validation: (r) => r.required(),
+      validation: (r) => r.custom(requiredUnlessSubmission),
     }),
-    defineField({ name: 'sourceUrl', type: 'url', validation: (r) => r.required() }),
+    defineField({
+      name: 'sourceUrl',
+      type: 'url',
+      validation: (r) => r.custom(requiredUnlessSubmission),
+    }),
     defineField({ name: 'externalId', title: 'External ID / SKU / ASIN', type: 'string' }),
+    defineField({
+      name: 'gtin',
+      title: 'Barcode (GTIN)',
+      type: 'string',
+      validation: (r) => r.custom(gtinValidation),
+    }),
     defineField({ name: 'extractedAt', type: 'datetime', validation: (r) => r.required() }),
     defineField({
       name: 'extractor',
@@ -461,6 +559,50 @@ export const ingestionCandidate = defineType({
             : true,
         ),
     }),
+    defineField({
+      name: 'goalSuggestions',
+      type: 'array',
+      description:
+        'Goals the source markets this product for. Suggestions only: they become CANDIDATE product↔goal relationships once the product exists.',
+      of: [
+        defineArrayMember({
+          type: 'object',
+          fields: [
+            defineField({ name: 'goal', type: 'reference', to: [{ type: 'goal' }] }),
+            defineField({ name: 'goalSlug', type: 'string' }),
+            defineField({ name: 'basis', type: 'string', options: { list: PRODUCT_GOAL_BASIS } }),
+            defineField({ name: 'statement', type: 'string' }),
+            defineField({ name: 'sourceLocator', type: 'string' }),
+          ],
+        }),
+      ],
+    }),
+    defineField({
+      name: 'proposedProductChanges',
+      title: 'Product changes awaiting review',
+      type: 'object',
+      readOnly: true,
+      description:
+        'For a label update to a live product: current-field changes (serving, veg status) held back until editorial approval, then applied on release.',
+      options: { collapsible: true, collapsed: true },
+      fields: [
+        defineField({ name: 'serving', type: 'servingSpec' }),
+        defineField({ name: 'servingSize', type: 'quantity' }),
+        defineField({ name: 'servingSizeText', type: 'string' }),
+        defineField({ name: 'servingsPerContainer', type: 'number' }),
+        defineField({ name: 'vegStatus', type: 'string' }),
+        defineField({ name: 'vegStatusReason', type: 'text', rows: 2 }),
+        defineField({ name: 'lastVerifiedAt', type: 'datetime' }),
+      ],
+    }),
+    defineField({ name: 'proposedChangesAppliedAt', type: 'datetime', readOnly: true }),
+    defineField({
+      name: 'unresolved',
+      title: 'Unresolved (unclear) values',
+      type: 'array',
+      of: [defineArrayMember({ type: 'string' })],
+      description: 'Values the reviewer could not read. Each one blocks editorial review.',
+    }),
     defineField({ name: 'reviewedBy', type: 'string' }),
     defineField({ name: 'reviewedAt', type: 'datetime' }),
     defineField({ name: 'notes', type: 'text', rows: 2 }),
@@ -512,8 +654,27 @@ export const productReference = defineType({
       to: [{ type: 'dataSource' }],
       validation: (r) => r.required(),
     }),
-    defineField({ name: 'url', type: 'url', validation: (r) => r.required() }),
+    defineField({
+      name: 'url',
+      title: 'Canonical URL',
+      type: 'url',
+      description: 'Optional for label submissions, which may only have a barcode.',
+      validation: (r) =>
+        r.custom((v, ctx) =>
+          !v && !(ctx.document as { gtin?: string })?.gtin
+            ? 'A reference needs a URL or a GTIN.'
+            : true,
+        ),
+    }),
     defineField({ name: 'externalId', title: 'External ID / SKU / ASIN', type: 'string' }),
+    defineField({
+      name: 'gtin',
+      title: 'Barcode (GTIN)',
+      type: 'string',
+      description:
+        'Digits only. The strongest exact identity key, but still only a suggestion: a person confirms matches.',
+      validation: (r) => r.custom(gtinValidation),
+    }),
     defineField({
       name: 'variantLabel',
       title: 'Variant as listed',

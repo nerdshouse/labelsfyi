@@ -16,6 +16,7 @@ export interface SearchHit {
 }
 
 const TYPE_BOOST: Record<SearchDocument['type'], number> = {
+  goal: 1.25,
   product: 1.2,
   ingredient: 1.15,
   brand: 1.1,

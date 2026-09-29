@@ -1,0 +1,58 @@
+---
+import '@/styles/global.css';
+
+/** Internal tools only: no analytics, no public chrome, never indexed. */
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const msg = Astro.url.searchParams.get('msg');
+const errors = Astro.url.searchParams.getAll('error');
+---
+
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} · labels.fyi internal</title>
+  </head>
+  <body class="min-h-dvh bg-paper text-ink">
+    <header class="border-b border-ink bg-ink text-paper">
+      <div class="page flex h-12 items-center justify-between">
+        <a href="/internal/review" class="font-semibold">
+          labels<span class="ml-px bg-marker px-1 font-mono text-ink">.fyi</span>{' '}
+          <span class="caption ml-2 hidden text-paper/70 sm:inline">Internal · review</span>
+        </a>
+        <nav class="flex items-center gap-4 text-sm">
+          <a href="/internal/review" class="hover:underline">
+            Submissions
+          </a>
+          <a href="/internal/goals" class="hover:underline">
+            Goals
+          </a>
+          <a href="/internal/candidates" class="hover:underline">
+            Candidates
+          </a>
+          <span class="caption text-paper/60">Not public</span>
+        </nav>
+      </div>
+    </header>
+    <main class="page py-6">
+      {msg && (
+        <p class="notice mb-4" role="status">
+          {msg}
+        </p>
+      )}
+      {errors.length > 0 && (
+        <div class="mb-4 border-l-[3px] border-alert bg-sheet px-4 py-3 text-sm" role="alert">
+          {errors.map((e) => (
+            <p>{e}</p>
+          ))}
+        </div>
+      )}
+      <slot />
+    </main>
+  </body>
+</html>

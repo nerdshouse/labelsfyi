@@ -1,0 +1,186 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+import { comparePath } from '@/lib/comparison/compare-two';
+import { imageSrc } from '@/lib/content/image';
+import { FORMAT_LABEL } from '@/lib/editorial/meta';
+import type { GoalCard } from '@/lib/goals/goals';
+
+/**
+ * One product on a goal page: identity, what the label declares for the
+ * goal's ingredients, a dated price, evidence flags, and links out to the
+ * decoder / receipt / comparison / merchants. Facts only; no score.
+ * Without an authorized image it renders a typographic tile by design.
+ */
+interface Props {
+  card: GoalCard;
+  partners: GoalCard[];
+}
+const { card: c, partners } = Astro.props;
+const format = FORMAT_LABEL[c.format] ?? c.format;
+---
+
+<article
+  class="flex flex-col border-2 border-ink bg-sheet"
+  data-goal-card
+  data-slug={c.slug}
+  data-brand={c.brand}
+  data-name={c.name}
+  data-ingredients={c.ingredientKeys.join(' ')}
+  data-veg={c.vegStatus === 'VEGETARIAN' || c.vegStatus === 'VEGAN' ? '1' : '0'}
+  data-verified={c.labelVerified ? '1' : '0'}
+  data-evidence={c.claimsChecked > 0 ? '1' : '0'}
+  data-per-serving={c.price?.perServingValue ?? ''}
+>
+  <div class="grid grid-cols-[5.5rem_1fr] gap-3 border-b border-ink p-3">
+    {c.image ? (
+      <img
+        src={imageSrc(c.image, 240)}
+        alt={c.image.alt || `${c.brand} ${c.name}`}
+        width="88"
+        height="110"
+        loading="lazy"
+        decoding="async"
+        class="aspect-[4/5] w-full border border-line bg-paper object-contain"
+        data-product-image
+      />
+    ) : (
+      <div
+        class="relative flex aspect-[4/5] w-full flex-col justify-between border border-ink bg-paper-2 p-1.5"
+        aria-hidden="true"
+        data-neutral-tile
+      >
+        <span class="border-t-[3px] border-ink pt-1 font-mono text-[0.55rem] leading-tight font-semibold tracking-wide uppercase">
+          {c.brand}
+        </span>
+        <span class="font-serif text-[0.8rem] leading-tight">{c.name}</span>
+        <span class="font-mono text-[0.55rem] text-ink-2 uppercase">{format}</span>
+      </div>
+    )}
+    <div class="min-w-0">
+      <p class="caption text-ink-3">{c.brand}</p>
+      <h3 class="mt-0.5 font-serif text-lg leading-snug">
+        <a href={c.href} class="hover:underline">
+          {c.name}
+        </a>
+      </h3>
+      <p class="mt-1 flex items-center gap-2 text-xs text-ink-2">
+        <VegMark status={c.vegStatus} size={12} withLabel />
+        <span>· {format}</span>
+      </p>
+    </div>
+  </div>
+
+  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 px-3 py-3 text-sm">
+    {c.keyIngredients.length > 0 && (
+      <>
+        <dt class="text-ink-3">Key ingredients</dt>
+        <dd>{c.keyIngredients.join(' · ')}</dd>
+      </>
+    )}
+    <dt class="text-ink-3">Serving</dt>
+    <dd class:list={[c.serving === 'Not disclosed' && 'text-ink-3 italic']}>{c.serving}</dd>
+    {c.amounts.map((a) => (
+      <>
+        <dt class="text-ink-3">{a.label}</dt>
+        <dd
+          class:list={[
+            'num font-mono',
+            a.value === 'Not disclosed' && 'font-sans text-ink-3 italic',
+          ]}
+          data-amount={a.kind}
+        >
+          {a.value}
+        </dd>
+      </>
+    ))}
+    <dt class="text-ink-3">Observed price</dt>
+    <dd data-price>
+      {c.price ? (
+        <>
+          <span class="num font-mono">{c.price.amount}</span>
+          {c.price.perServing && (
+            <span class="num ml-1 font-mono text-ink-2">· {c.price.perServing} / serving</span>
+          )}
+          <span class="block text-xs text-ink-3">
+            {c.price.merchant}, observed {c.price.observedAt}
+          </span>
+        </>
+      ) : (
+        <span class="text-ink-3 italic">No price observed</span>
+      )}
+    </dd>
+    <dt class="text-ink-3">Label</dt>
+    <dd>
+      {c.labelVerified ? (
+        <span>✓ {c.labelEvidence}</span>
+      ) : (
+        <span class="text-ink-2">{c.labelEvidence}</span>
+      )}
+      {c.claimsChecked > 0 && <span class="ml-2 tag">Claims checked: {c.claimsChecked}</span>}
+      {c.openDiscrepancies > 0 && (
+        <span class="ml-2 tag">Open differences: {c.openDiscrepancies}</span>
+      )}
+      {c.brandResponse && <span class="ml-2 tag">Brand response on file</span>}
+    </dd>
+  </dl>
+
+  {c.why.length > 0 && (
+    <details class="border-t border-line px-3 py-2 text-sm" data-why>
+      <summary class="cursor-pointer text-ink-2">Why this appears</summary>
+      <ul class="mt-1 space-y-1 text-ink-2">
+        {c.why.map((w) => (
+          <li>{w}</li>
+        ))}
+      </ul>
+    </details>
+  )}
+
+  <div class="mt-auto border-t border-ink px-3 py-3">
+    <p class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <a href={c.href} class="link font-medium" data-decoder-link>
+        View label →
+      </a>
+      {c.receiptHref && (
+        <a href={c.receiptHref} class="link">
+          View receipt
+        </a>
+      )}
+    </p>
+    {partners.length > 0 && (
+      <details class="mt-2 text-sm" data-compare>
+        <summary class="cursor-pointer font-medium">Compare</summary>
+        <ul class="mt-1 space-y-1">
+          {partners.map((x) => (
+            <li>
+              <a href={comparePath(c.slug, x.slug)} class="link" data-compare-link>
+                vs {x.brand} {x.name}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
+    {c.buy.length > 0 && (
+      <ul class="mt-3 space-y-1.5" data-buy>
+        {c.buy.map((b) => (
+          <li class="flex flex-wrap items-baseline justify-between gap-x-3">
+            <a
+              href={b.href}
+              rel={b.rel}
+              target="_blank"
+              class="link font-medium"
+              data-buy-link={b.official ? 'official' : 'merchant'}
+            >
+              {b.label} ↗
+            </a>
+            <span class="text-xs text-ink-3">
+              {b.price && <span class="num font-mono text-ink-2">{b.price}</span>}
+              {b.observedAt && <span> · observed {b.observedAt}</span>}
+              {b.affiliate && <span> · affiliate link</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</article>

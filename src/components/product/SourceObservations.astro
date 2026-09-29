@@ -1,0 +1,51 @@
+---
+import { presentObservationGroups, type productDecoder } from '@/lib/comparison';
+
+/** What each kind of source says: pack vs brand website vs marketplaces, with attribution. */
+interface Props {
+  decoder: ReturnType<typeof productDecoder>;
+  sourceNumbers: Map<string, number>;
+}
+const { decoder, sourceNumbers } = Astro.props;
+const groups = presentObservationGroups(decoder);
+---
+
+<div class="grid gap-6 md:grid-cols-3">
+  {groups.map((g) => (
+    <section aria-labelledby={`obs-${g.key}`} class="border-t-[3px] border-ink pt-2">
+      <h3 id={`obs-${g.key}`} class="caption text-ink-3">
+        {g.title} <span class="num">({g.items.length})</span>
+      </h3>
+      {g.items.length ? (
+        <ul class="mt-2 divide-y divide-line">
+          {g.items.map((o) => (
+            <li class="py-2.5 text-sm">
+              <p class="caption text-ink-3">{o.kind}</p>
+              <p class="mt-0.5 text-ink">{o.value}</p>
+              <p class="num mt-1 text-xs text-ink-3">
+                {[o.sourceKind, o.locator].filter(Boolean).join(' · ')}
+                {o.locator || o.sourceKind ? ' · ' : ''}
+                <time datetime={o.observedAtIso}>{o.observedAt}</time>
+                {o.verifiedBy && ` · verified by ${o.verifiedBy}`}
+                {o.sourceId && sourceNumbers.get(o.sourceId) && (
+                  <>
+                    {' '}
+                    <a href={`#source-${sourceNumbers.get(o.sourceId)}`} class="link font-mono">
+                      [{sourceNumbers.get(o.sourceId)}]
+                    </a>
+                  </>
+                )}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="mt-2 text-sm text-ink-3">Nothing recorded from this source.</p>
+      )}
+    </section>
+  ))}
+</div>
+<p class="mt-4 max-w-(--container-prose) text-xs text-ink-3">
+  Only verified observations are shown. Website and marketplace text is recorded as found; published
+  label facts come from label evidence.
+</p>

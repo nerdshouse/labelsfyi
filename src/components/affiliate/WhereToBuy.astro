@@ -37,7 +37,7 @@ const priceByMerchant = new Map(latestPricesByMerchant(p.prices).map((s) => [s.m
             <div>
               <AffiliateLink
                 offer={o}
-                productId={p._id}
+                productSlug={p.slug}
                 productName={`${p.brand.name} ${p.name}`}
               />
             </div>

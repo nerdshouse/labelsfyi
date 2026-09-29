@@ -4,3 +4,6 @@ export const SANITY_PROJECT_ID = undefined;
 export const SANITY_DATASET = 'production';
 export const SANITY_API_VERSION = '2025-02-19';
 export const SANITY_READ_TOKEN = undefined;
+export const DEPLOY_ENV = 'development';
+export const SANITY_API_HOST = undefined;
+export const PRODUCTION_REHEARSAL = 'false';

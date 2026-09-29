@@ -6,6 +6,8 @@
  * describes both.
  */
 
+import type { ServingSpec, ServingUnit } from '@/lib/identity/serving';
+
 // ─── Enumerations ─────────────────────────────────────────────────────────
 
 export const VEG_STATUSES = ['VEGETARIAN', 'NON_VEGETARIAN', 'VEGAN', 'UNKNOWN'] as const;
@@ -84,6 +86,68 @@ export const OBSERVATION_TYPES = [
 ] as const;
 export type ObservationType = (typeof OBSERVATION_TYPES)[number];
 
+/**
+ * Where a fact was observed. Web content is discovery/input; label evidence
+ * (physical pack, brand-supplied label, confirmed pack photo) is the basis
+ * for published product facts.
+ */
+export const SOURCE_KINDS = [
+  'PHYSICAL_PACK',
+  'BRAND_WEBSITE',
+  'MARKETPLACE',
+  'BRAND_SUPPLIED_LABEL',
+  'PRODUCT_ARTWORK',
+  'MARKETING_COPY',
+  'OTHER',
+] as const;
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+
+export const IMAGE_KINDS = [
+  'PACK_PHOTO',
+  'PRINT_ARTWORK',
+  'MARKETING_GRAPHIC',
+  'RETYPESET_TABLE',
+  'UNKNOWN',
+] as const;
+export type ImageKind = (typeof IMAGE_KINDS)[number];
+export type DepictsExactProduct = 'CONFIRMED' | 'UNCONFIRMED' | 'NOT_THIS_PRODUCT';
+
+export type VerificationStatus = 'unverified' | 'verified' | 'rejected';
+export type ExtractionMethod = 'manual' | 'structured_data' | 'parser' | 'ocr' | 'ai';
+
+export const CLAIM_RESEARCH_STATUSES = [
+  'NEEDS_EVIDENCE',
+  'IN_RESEARCH',
+  'EVIDENCE_IDENTIFIED',
+  'INSUFFICIENT_EVIDENCE_IDENTIFIED',
+] as const;
+export type ClaimResearchStatus = (typeof CLAIM_RESEARCH_STATUSES)[number];
+
+export const DISCREPANCY_STATUSES = [
+  'OPEN',
+  'AWAITING_BRAND',
+  'BRAND_RESPONDED',
+  'RESOLVED',
+  'UNRESOLVED',
+  'SUPERSEDED',
+] as const;
+export type DiscrepancyStatus = (typeof DISCREPANCY_STATUSES)[number];
+/** Factual attention level. Never implies wrongdoing. */
+export type DiscrepancySeverity = 'INFORMATIONAL' | 'MATERIAL' | 'HIGH_ATTENTION';
+
+export const BRAND_RESPONSE_RESOLUTIONS = [
+  'WEBSITE_CORRECTED',
+  'LABEL_CONFIRMED',
+  'FORMULATION_CHANGE',
+  'PACKAGING_CHANGE',
+  'BOTH_CORRECT_DIFFERENT_VERSIONS',
+  'UNRESOLVED',
+  'OTHER',
+] as const;
+export type BrandResponseResolution = (typeof BRAND_RESPONSE_RESOLUTIONS)[number];
+
+export type { ServingSpec, ServingUnit };
+
 export const CURRENCIES = ['INR', 'USD'] as const;
 export type Currency = (typeof CURRENCIES)[number];
 
@@ -116,6 +180,31 @@ export interface ImageData {
   height: number | null;
   lqip: string | null;
   caption: string | null;
+  /** Display basis; product images are gated on it (docs/assets.md). */
+  provenance?: ImageProvenance;
+  permission?: AssetPermissionData | null;
+}
+
+export type ImageProvenance =
+  | 'UNKNOWN'
+  | 'NOT_REQUESTED'
+  | 'AUTHORIZED'
+  | 'EDITORIAL_LABEL_PHOTO'
+  | 'USER_SUBMITTED'
+  | 'RESTRICTED'
+  | 'REVOKED';
+
+export interface AssetPermissionData {
+  status: 'NOT_REQUESTED' | 'REQUESTED' | 'AUTHORIZED' | 'RESTRICTED' | 'REVOKED';
+  assetType: 'PRODUCT_IMAGE' | 'BRAND_LOGO' | 'PACK_IMAGE' | 'LABEL_IMAGE' | 'PRODUCT_COPY';
+  grantedAt: string | null;
+  expiresAt: string | null;
+  /** FACTUAL_DATA | LABEL_INFORMATION | IMAGES | URLS. Display needs IMAGES. */
+  scope: string[];
+  /** Set when a labels.fyi person read the written permission. Display needs it. */
+  verifiedAt: string | null;
+  brand: string | null;
+  product: string | null;
 }
 
 /** Portable Text is rendered by src/lib/content/portable-text.ts. */
@@ -208,12 +297,36 @@ export interface LabelIngredientRow {
   observation: string | null;
   /** Layer C: labels.fyi's interpretation of the printed amount. */
   editorialNote: string | null;
+  /** Ingredient form as declared, e.g. "Magnesium bisglycinate". */
+  form: string | null;
+  /** Declared weight of the named compound/form per serving. */
+  compoundAmount: number | null;
+  compoundUnit: Unit | null;
+  /**
+   * Elemental amount per serving (e.g. elemental magnesium). Null = UNKNOWN.
+   * Never derived from the compound weight unless elementalBasis says an
+   * editorial calculation with a cited basis was made.
+   */
+  elementalAmount: number | null;
+  elementalUnit: Unit | null;
+  elementalBasis: 'label_declared' | 'editorial_calculation' | null;
+  /** Where on the label this row is, e.g. "Supplement facts, row 2". */
+  sourceLocator: string | null;
 }
 
 export interface LabelPanelData {
   _id: string;
   panelType: PanelType;
   title: string | null;
+  /** What this transcription is based on. */
+  sourceType: SourceKind | null;
+  /** When transcribed from an image: its classification and product confirmation. */
+  imageEvidence: {
+    url: string | null;
+    imageKind: ImageKind | null;
+    depictsExactProduct: DepictsExactProduct | null;
+  } | null;
+  serving: ServingSpec | null;
   servingSize: Quantity | null;
   servingSizeText: string | null;
   servingsPerContainer: number | null;
@@ -228,6 +341,12 @@ export interface LabelPanelData {
   image: ImageData | null;
   notes: string | null;
   isCurrent: boolean;
+  /** When a person verified the transcription (panels from label submissions). */
+  verifiedAt: string | null;
+  /** Ids of earlier panels this one replaces (treated as history once this is approved). */
+  supersedes: string[];
+  /** Created from a label submission: renders only after a later approved review. */
+  fromSubmission: boolean;
 }
 
 // ─── Claims & evidence ────────────────────────────────────────────────────
@@ -256,6 +375,10 @@ export interface ClaimData {
   order: number | null;
   /** When the claim was seen on the label/listing. */
   observedAt: string | null;
+  /** CLAIM_SOURCE: where the brand makes the claim (distinct from evidence sources). */
+  claimSource: { sourceType: SourceKind | null; locator: string | null } | null;
+  /** Evidence research state; only researched claims are published. */
+  researchStatus: ClaimResearchStatus;
   /** Claims from an earlier label version are kept, marked superseded. */
   status: 'current' | 'superseded';
   supersededAt: string | null;
@@ -276,15 +399,28 @@ export interface ObservationData {
   /** Named person who independently verified it (required for ingested data). */
   verifiedBy: string | null;
   verifiedAt: string | null;
+  sourceType: SourceKind | null;
+  /** Short pointer to where in the source, e.g. "gallery image 7 → supplement facts". */
+  sourceLocator: string | null;
+  extractionMethod: ExtractionMethod | null;
+  verificationStatus: VerificationStatus;
   /** The captured web page this was observed on, if any. */
   snapshot: { url: string; fetchedAt: string } | null;
+  /** Created from a label submission: renders only after a later approved review. */
+  fromSubmission: boolean;
 }
+
+export type MerchantKind =
+  'OFFICIAL_STORE' | 'MARKETPLACE' | 'QUICK_COMMERCE' | 'PHARMACY' | 'RETAILER';
 
 export interface MerchantData {
   _id: string;
   name: string;
   slug: string;
   websiteUrl: string | null;
+  kind?: MerchantKind;
+  /** For an official store: the brand whose store it is. */
+  brand?: string | null;
 }
 
 export type Availability = 'in_stock' | 'out_of_stock' | 'unknown';
@@ -313,6 +449,8 @@ export interface AffiliateOfferData {
   disclosureRequired: boolean;
   lastCheckedAt: string | null;
   relationship: 'affiliate' | 'sponsored' | 'none';
+  affiliateNetwork?: string | null;
+  trackingId?: string | null;
 }
 
 // ─── Entities ─────────────────────────────────────────────────────────────
@@ -329,6 +467,9 @@ export interface CategoryData extends Ref {
 export interface ProductSummary {
   _id: string;
   name: string;
+  /** Flavour / strength variant, e.g. "Dark Chocolate". */
+  variant: string | null;
+  serving: ServingSpec | null;
   slug: string;
   brand: BrandSummary;
   category: CategoryData | null;
@@ -362,6 +503,7 @@ export interface ProductDetail extends ProductSummary, EditorialMeta {
   claims: ClaimData[];
   observations: ObservationData[];
   offers: AffiliateOfferData[];
+  discrepancies: DiscrepancyData[];
   ingredients: Array<Ref & { _id: string }>;
   comparisons: ComparisonSummary[];
   related: ProductSummary[];
@@ -475,10 +617,94 @@ export interface CategoryDetail extends CategoryData {
 
 export interface SearchDocument {
   id: string;
-  type: 'product' | 'ingredient' | 'brand' | 'guide' | 'comparison';
+  type: 'goal' | 'product' | 'ingredient' | 'brand' | 'guide' | 'comparison';
   title: string;
   subtitle: string;
   url: string;
   keywords: string[];
   vegStatus?: VegStatus;
+}
+
+// ─── Discrepancies & brand responses ──────────────────────────────────────
+
+/** One source's value for a disputed field. Values are never overwritten. */
+export interface DiscrepancyValue {
+  _key: string;
+  sourceType: SourceKind;
+  value: string;
+  locator: string | null;
+  observedAt: string | null;
+  source: SourceData | null;
+  snapshotUrl: string | null;
+}
+
+export interface BrandResponseData {
+  _id: string;
+  contactedAt: string | null;
+  contactMethod: string | null;
+  respondedAt: string | null;
+  respondentRole: string | null;
+  response: string | null;
+  resolution: BrandResponseResolution | null;
+  supportingSources: SourceData[];
+}
+
+export interface DiscrepancyData {
+  _id: string;
+  field: string;
+  values: DiscrepancyValue[];
+  status: DiscrepancyStatus;
+  severity: DiscrepancySeverity;
+  detectedAt: string;
+  notes: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  brandResponses: BrandResponseData[];
+}
+
+// ─── Goals (Sprint 6) ─────────────────────────────────────────────────────
+
+export type GoalIngredientRelation = 'COMMONLY_FOUND' | 'EDITORIALLY_REVIEWED';
+
+export interface GoalIngredientData {
+  name: string;
+  ingredient: { _id: string; name: string; slug: string } | null;
+  matchNames: string[];
+  relation: GoalIngredientRelation;
+  evidence: string | null;
+}
+
+export type ProductGoalBasis = 'BRAND_MARKETING' | 'EDITORIAL_CLASSIFICATION' | 'INGREDIENT_MATCH';
+
+export interface ProductGoalData {
+  _id: string;
+  product: string;
+  goal: string;
+  basis: ProductGoalBasis;
+  statement: string | null;
+  sourceUrl: string | null;
+  sourceLocator: string | null;
+  observedAt: string | null;
+  source: SourceData | null;
+  reviewedBy: string;
+  reviewedAt: string;
+}
+
+export interface GoalData {
+  _id: string;
+  _updatedAt: string;
+  name: string;
+  slug: string;
+  shortDescription: string;
+  discoveryDescription: string;
+  order: number;
+  ingredients: GoalIngredientData[];
+  noindex: boolean;
+  isDemo: boolean;
+  reviews: EditorialReviewData[];
+}
+
+export interface GoalDetail extends GoalData {
+  /** Published products with at least one approved relationship, and why. */
+  memberships: Array<{ productId: string; relationships: ProductGoalData[] }>;
 }

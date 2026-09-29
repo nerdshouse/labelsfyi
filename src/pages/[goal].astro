@@ -1,0 +1,216 @@
+---
+import GoalProductCard from '@/components/goals/GoalProductCard.astro';
+import SearchBox from '@/components/search/SearchBox.astro';
+import Breadcrumbs from '@/components/ui/Breadcrumbs.astro';
+import DemoFlag from '@/components/ui/DemoFlag.astro';
+import SectionHead from '@/components/ui/SectionHead.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { AFFILIATE_DISCLOSURE } from '@/lib/affiliates';
+import { getContentGraph } from '@/lib/content/repository';
+import type { GoalDetail } from '@/lib/content/types';
+import { comparePartners, goalView } from '@/lib/goals/goals';
+import { RESERVED_TOP_LEVEL } from '@/lib/goals/reserved';
+
+/**
+ * Goal discovery page (/sleep, /stress, …). Rendered at build time from the
+ * published graph: one page per published goal, nothing else. A goal is a
+ * consumer discovery category, not a diagnosis or an efficacy claim.
+ */
+export async function getStaticPaths() {
+  const graph = await getContentGraph();
+  return graph.goals
+    .filter((goal) => !RESERVED_TOP_LEVEL.has(goal.slug))
+    .map((goal) => ({ params: { goal: goal.slug }, props: { goal } }));
+}
+
+interface Props {
+  goal: GoalDetail;
+}
+const graph = await getContentGraph();
+const v = goalView(graph, Astro.props.goal);
+const g = v.goal;
+const crumbs = [{ name: g.name, href: v.path }];
+const anyAffiliate = v.cards.some((c) => c.buy.some((b) => b.affiliate));
+const lower = g.name.toLowerCase();
+---
+
+<BaseLayout
+  title={`Supplements marketed for ${lower} support: compare labels`}
+  description={
+    v.cards.length
+      ? `${g.shortDescription} Compare ${v.cards.length} product label${v.cards.length === 1 ? '' : 's'} by ingredient, form, amount, dated price and label evidence. No rankings.`
+      : g.shortDescription
+  }
+  canonicalPath={v.path}
+  noindex={!v.indexable}
+  crumbs={crumbs}
+>
+  <div class="page pt-5" data-goal-page={g.slug}>
+    <Breadcrumbs items={crumbs} />
+    <header class="mt-6 max-w-3xl">
+      <p class="caption text-ink-3">What are you looking for?</p>
+      <h1 class="display mt-2">{g.name}</h1>
+      <p class="lede mt-3">{g.shortDescription}</p>
+      <p class="mt-3 text-ink-2">{g.discoveryDescription}</p>
+      <p class="mt-3 text-sm text-ink-3">
+        Not medical advice. Listing a product here does not mean it works or suits you; speak to a
+        doctor about health concerns.
+      </p>
+      <div class="mt-6 max-w-xl">
+        <SearchBox variant="page" id="goal-search" />
+      </div>
+    </header>
+
+    {g.isDemo && (
+      <div class="mt-8">
+        <DemoFlag what="This page" />
+      </div>
+    )}
+
+    <section class="mt-12" aria-labelledby="ingredients-h">
+      <SectionHead
+        id="ingredients"
+        kicker="Common ingredients"
+        title={`Found in products marketed for ${lower} support`}
+      />
+      <p class="-mt-2 mb-4 max-w-3xl text-sm text-ink-2">
+        These ingredients commonly appear in products marketed for {lower} support. That is not a
+        claim that they work. Choose one to see the products whose labels list it.
+      </p>
+      <div class="flex flex-wrap gap-2" data-chips>
+        <button type="button" class="chip" aria-pressed="true" data-chip="">
+          All ingredients
+        </button>
+        {v.chips.map((c) => (
+          <button
+            type="button"
+            class="chip"
+            aria-pressed="false"
+            data-chip={c.key}
+            disabled={c.count === 0}
+            title={
+              c.relation === 'EDITORIALLY_REVIEWED'
+                ? 'Editorially reviewed evidence record'
+                : undefined
+            }
+          >
+            {c.name}
+            <span class="num font-mono text-xs text-ink-3">{c.count}</span>
+            {c.relation === 'EDITORIALLY_REVIEWED' && <span class="tag">Reviewed</span>}
+          </button>
+        ))}
+      </div>
+      {v.chips.some((c) => c.href) && (
+        <p class="mt-3 text-sm text-ink-3">
+          Ingredient pages:{' '}
+          {v.chips
+            .filter((c) => c.href)
+            .map((c, i) => (
+              <>
+                {i > 0 && ' · '}
+                <a href={c.href!} class="link">
+                  {c.name}
+                </a>
+              </>
+            ))}
+        </p>
+      )}
+    </section>
+
+    <section class="mt-14" aria-labelledby="products-h">
+      <SectionHead
+        id="products"
+        kicker="Products"
+        title={`${v.cards.length} product${v.cards.length === 1 ? '' : 's'} compared`}
+      />
+      {v.cards.length === 0 ? (
+        <p class="notice-quiet" data-empty-goal>
+          No products with verified labels are listed for {lower} yet.{' '}
+          <a href="/submit" class="link">
+            Submit a label
+          </a>
+          .
+        </p>
+      ) : (
+        <>
+          <form
+            class="mb-6 flex flex-wrap items-end gap-x-5 gap-y-3 border-y border-ink py-3 text-sm"
+            data-goal-filters
+            onsubmit="return false"
+          >
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="veg" class="size-4" /> Vegetarian
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="verified" class="size-4" /> Label verified
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="evidence" class="size-4" /> Claims checked
+            </label>
+            <label class="flex items-center gap-2">
+              Max ₹ / serving
+              <input
+                type="number"
+                name="max"
+                min="0"
+                step="1"
+                inputmode="decimal"
+                class="h-9 w-24 border border-ink bg-paper px-2 font-mono"
+              />
+            </label>
+            <label class="flex items-center gap-2">
+              Sort
+              <select name="sort" class="h-9 border border-ink bg-paper px-2">
+                <option value="az">Brand A–Z</option>
+                <option value="price">Price / serving (low to high)</option>
+              </select>
+            </label>
+            <p class="ml-auto text-ink-3" aria-live="polite">
+              <span data-visible-count>{v.cards.length}</span> shown
+            </p>
+          </form>
+          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-goal-cards>
+            {v.cards.map((c) => (
+              <GoalProductCard card={c} partners={comparePartners(v, c.slug)} />
+            ))}
+          </div>
+          <p class="mt-4 hidden text-sm text-ink-3" data-no-match>
+            No products match these filters.
+          </p>
+          {anyAffiliate && <p class="mt-8 text-xs text-ink-3">{AFFILIATE_DISCLOSURE}</p>}
+        </>
+      )}
+    </section>
+
+    <section class="mt-14 max-w-3xl text-sm text-ink-2" aria-labelledby="how-h">
+      <h2 id="how-h" class="caption rule-heavy pt-3 text-ink-3">
+        How products are listed here
+      </h2>
+      <ul class="mt-2 list-[square] space-y-1 pl-5">
+        <li>
+          A product appears only when a named editor has approved a sourced reason: usually that the
+          brand markets it for {lower} support. Containing an ingredient is not enough on its own.
+        </li>
+        <li>Products are listed alphabetically. There is no ranking, score or “best” pick.</li>
+        <li>
+          Amounts are as declared on the label. Missing values say “Not disclosed”; nothing is
+          estimated.
+        </li>
+        <li>Prices are dated observations, not live offers.</li>
+      </ul>
+      <p class="mt-3">
+        <a href="/methodology" class="link">
+          Methodology
+        </a>
+      </p>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import { initGoalFilters } from '@/components/goals/goal-filters';
+  import { track } from '@/lib/analytics/events';
+  initGoalFilters();
+  const page = document.querySelector<HTMLElement>('[data-goal-page]');
+  if (page) track('goal_view', { goal: page.dataset.goalPage });
+</script>

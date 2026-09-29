@@ -1,0 +1,79 @@
+# Production deploy for labels.fyi (docs/production.md).
+#
+# One guarded path for every trigger:
+#   push to main · Sanity publish (webhook → repository_dispatch) · daily rebuild · manual
+#
+# The job refuses to deploy anything except a real production build:
+#   build:production (DEPLOY_ENV=production, CONTENT_SOURCE=sanity, private dataset proven)
+#   → production dist checks → deploy-guard → wrangler deploy → live route checks
+#
+# Required repository/environment secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+# SANITY_READ_TOKEN. Optional variables: PUBLIC_GA_MEASUREMENT_ID, PUBLIC_CF_ANALYTICS_TOKEN,
+# PUBLIC_GSC_VERIFICATION.
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [sanity-publish]
+  schedule:
+    # 00:30 UTC = 06:00 IST. Review-due flags, price staleness and offer expiry are build-time.
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Quality gates
+        run: pnpm typecheck && pnpm lint && pnpm test
+
+      - name: Production build (private Sanity dataset)
+        run: pnpm build:production
+        env:
+          SANITY_READ_TOKEN: ${{ secrets.SANITY_READ_TOKEN }}
+          PUBLIC_GA_MEASUREMENT_ID: ${{ vars.PUBLIC_GA_MEASUREMENT_ID }}
+          PUBLIC_CF_ANALYTICS_TOKEN: ${{ vars.PUBLIC_CF_ANALYTICS_TOKEN }}
+          PUBLIC_GSC_VERIFICATION: ${{ vars.PUBLIC_GSC_VERIFICATION }}
+
+      - name: Production dist checks
+        run: pnpm test:dist:production
+        env:
+          # Lets check-dist prove the token value never reached a built file.
+          SANITY_READ_TOKEN: ${{ secrets.SANITY_READ_TOKEN }}
+
+      - name: Deploy guard
+        run: pnpm deploy:guard
+
+      - name: Deploy
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Live route checks
+        run: sleep 20 && pnpm test:routes https://labels.fyi --production
+
+      - name: workers.dev bypass is closed
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://labelsfyi.spring-queen-e318.workers.dev/ || true)
+          echo "workers.dev answered $code"
+          test "$code" != "200"

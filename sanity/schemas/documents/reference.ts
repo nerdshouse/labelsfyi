@@ -117,7 +117,13 @@ export const reviewer = defineType({
       type: 'boolean',
       initialValue: false,
       description:
-        'Development only. Placeholder reviewers are labelled and never emitted as a Person in structured data.',
+        'Development only. Placeholder reviewers are labelled and never emitted as a Person in structured data. Production ignores their approvals.',
+      validation: (r) =>
+        r.custom((v, ctx) =>
+          v === true && (ctx.document as { isDemo?: boolean } | undefined)?.isDemo !== true
+            ? 'A placeholder reviewer must also be marked demo (it can never review real content).'
+            : true,
+        ),
     }),
     defineField({ name: 'isDemo', type: 'boolean', initialValue: false }),
   ],
@@ -143,7 +149,20 @@ export const editorialReview = defineType({
       name: 'reviewer',
       type: 'reference',
       to: [{ type: 'reviewer' }],
-      validation: (r) => r.required(),
+      description:
+        'A real, credentialed person who agreed to review. Placeholders cannot approve real content.',
+      validation: (r) =>
+        r.required().custom(async (ref, ctx) => {
+          const doc = ctx.document as { isDemo?: boolean; status?: string } | undefined;
+          const id = (ref as { _ref?: string } | undefined)?._ref;
+          if (!id || doc?.isDemo === true || doc?.status !== 'approved') return true;
+          const placeholder = await ctx
+            .getClient({ apiVersion: '2025-02-19' })
+            .fetch<boolean | null>('*[_id in [$id, "drafts." + $id]][0].isPlaceholder', { id });
+          return placeholder === true
+            ? 'A placeholder reviewer cannot approve real content. Choose a real reviewer.'
+            : true;
+        }),
     }),
     defineField({
       name: 'scope',

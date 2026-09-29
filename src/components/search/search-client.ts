@@ -24,6 +24,7 @@ export function loadEngine(): Promise<SearchEngine> {
 }
 
 export const TYPE_LABEL: Record<SearchDocument['type'], string> = {
+  goal: 'Goal',
   product: 'Product',
   ingredient: 'Ingredient',
   brand: 'Brand',
@@ -114,10 +115,11 @@ export function initSearchBoxes() {
       go(items[idx]!);
     });
     input.addEventListener('blur', () => setTimeout(close, 120));
-    form.addEventListener('submit', () => track('search', { search_term: input.value.trim() }));
+    // Never the typed text (free text can contain anything): only that a search happened.
+    form.addEventListener('submit', () => track('search', { from: 'box' }));
 
     function go(doc: SearchDocument) {
-      track('search', { search_term: input.value.trim(), selected: doc.url });
+      track('search', { from: 'suggestion', selected: doc.url });
       location.href = doc.url;
     }
   });

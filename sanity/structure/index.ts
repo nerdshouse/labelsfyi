@@ -9,6 +9,8 @@ const related = (S: StructureBuilder, productId: string) =>
       ['observation', 'Observations', 'observedAt'],
       ['priceSnapshot', 'Price snapshots', 'capturedAt'],
       ['affiliateOffer', 'Retailer links', '_updatedAt'],
+      ['discrepancy', 'Discrepancies', 'detectedAt'],
+      ['brandResponse', 'Brand responses', 'contactedAt'],
     ] as const
   )
     .map(([type, title, orderField]) =>
@@ -77,7 +79,16 @@ export const structure: StructureResolver = (S) =>
                       .filter('_type in $types && workflowStatus == $status')
                       .params({
                         status,
-                        types: ['product', 'ingredient', 'claim', 'guide', 'comparison', 'brand'],
+                        types: [
+                          'product',
+                          'ingredient',
+                          'claim',
+                          'guide',
+                          'comparison',
+                          'brand',
+                          'discrepancy',
+                          'brandResponse',
+                        ],
                       }),
                   ),
               ),
@@ -149,11 +160,61 @@ export const structure: StructureResolver = (S) =>
       S.documentTypeListItem('comparison').title('Comparisons'),
       S.divider(),
       S.listItem()
+        .title('Discrepancies & brand responses')
+        .child(
+          S.list()
+            .title('Discrepancies & brand responses')
+            .items([
+              S.listItem()
+                .title('Open discrepancies')
+                .child(
+                  S.documentList()
+                    .title('Open')
+                    .schemaType('discrepancy')
+                    .filter(
+                      '_type == "discrepancy" && status in ["OPEN", "AWAITING_BRAND", "BRAND_RESPONDED", "UNRESOLVED"]',
+                    ),
+                ),
+              S.documentTypeListItem('discrepancy').title('All discrepancies'),
+              S.documentTypeListItem('brandResponse').title('Brand responses'),
+            ]),
+        ),
+      S.listItem()
+        .title('Goals & commerce')
+        .child(
+          S.list()
+            .title('Goals & commerce')
+            .items([
+              S.documentTypeListItem('goal').title('Goals'),
+              S.listItem()
+                .title('Goal assignments to review')
+                .child(
+                  S.documentList()
+                    .title('Candidate product ↔ goal (review at /internal/goals)')
+                    .schemaType('productGoal')
+                    .filter('_type == "productGoal" && status == "CANDIDATE"'),
+                ),
+              S.documentTypeListItem('productGoal').title('All product ↔ goal'),
+              S.divider(),
+              S.documentTypeListItem('assetPermission').title('Asset permissions'),
+              S.documentTypeListItem('merchant').title('Merchants'),
+            ]),
+        ),
+      S.listItem()
         .title('Ingestion (not published)')
         .child(
           S.list()
             .title('Ingestion')
             .items([
+              S.listItem()
+                .title('Label submissions')
+                .child(
+                  S.documentList()
+                    .title('Label submissions (review at /internal/review)')
+                    .schemaType('labelSubmission')
+                    .filter('_type == "labelSubmission"')
+                    .defaultOrdering([{ field: 'submittedAt', direction: 'desc' }]),
+                ),
               S.listItem()
                 .title('Candidates needing verification')
                 .child(

@@ -1,4 +1,9 @@
+import type { LabelVerification } from '@/lib/editorial/evidence';
 import type {
+  BrandResponseResolution,
+  DiscrepancySeverity,
+  DiscrepancyStatus,
+  SourceKind,
   AssessmentStatus,
   ClaimType,
   ObservationType,
@@ -118,4 +123,58 @@ export const FORMAT_LABEL: Record<string, string> = {
   bar: 'Bar',
   sachet: 'Sachets',
   other: 'Other',
+};
+
+// ─── Provenance vocabulary (neutral wording) ─────────────────────────────
+
+export const SOURCE_KIND: Record<SourceKind, string> = {
+  PHYSICAL_PACK: 'Pack',
+  BRAND_SUPPLIED_LABEL: 'Brand label file',
+  PRODUCT_ARTWORK: 'Label artwork',
+  BRAND_WEBSITE: 'Brand website',
+  MARKETPLACE: 'Marketplace',
+  MARKETING_COPY: 'Marketing copy',
+  OTHER: 'Other source',
+};
+
+export const LABEL_VERIFICATION: Record<LabelVerification, { label: string; description: string }> =
+  {
+    label_verified: {
+      label: 'Label verified',
+      description: 'Transcribed from the pack or a brand-supplied label file.',
+    },
+    artwork_only: {
+      label: 'Artwork only',
+      description: 'Transcribed from confirmed label artwork; not yet checked against a pack.',
+    },
+    no_label_evidence: {
+      label: 'No label evidence',
+      description: 'No acceptable label evidence captured yet.',
+    },
+  };
+
+export const DISCREPANCY_STATUS: Record<DiscrepancyStatus, string> = {
+  OPEN: 'Open',
+  AWAITING_BRAND: 'Awaiting brand',
+  BRAND_RESPONDED: 'Brand responded',
+  RESOLVED: 'Resolved',
+  UNRESOLVED: 'Unresolved',
+  SUPERSEDED: 'Superseded',
+};
+
+/** Attention level only; never a judgement of intent. */
+export const DISCREPANCY_SEVERITY: Record<DiscrepancySeverity, string> = {
+  INFORMATIONAL: 'Informational',
+  MATERIAL: 'Material',
+  HIGH_ATTENTION: 'High attention',
+};
+
+export const BRAND_RESOLUTION: Record<BrandResponseResolution, string> = {
+  WEBSITE_CORRECTED: 'Website corrected',
+  LABEL_CONFIRMED: 'Label confirmed',
+  FORMULATION_CHANGE: 'Formulation change',
+  PACKAGING_CHANGE: 'Packaging change',
+  BOTH_CORRECT_DIFFERENT_VERSIONS: 'Both correct (different versions)',
+  UNRESOLVED: 'Unresolved',
+  OTHER: 'Other',
 };

@@ -23,6 +23,8 @@ const browse = [
       <SearchBox variant="page" id="page-search" autofocus />
     </div>
 
+    <div class="mt-10" data-comparison-slot hidden></div>
+
     <div class="mt-8 max-w-3xl" aria-live="polite" data-search-results>
       <div data-state="idle">
         <p class="caption text-ink-3">Browse</p>
@@ -58,13 +60,39 @@ const browse = [
             .
           </li>
         </ul>
-        <p class="notice-quiet mt-6">
-          Can’t find a product? We add products as we capture and check their labels. Tell us what
-          to decode next:{' '}
-          <a href="mailto:hello@labels.fyi?subject=Product%20request" class="link">
-            hello@labels.fyi
-          </a>
-        </p>
+        <div
+          class="mt-6 grid gap-4 border-t-2 border-ink pt-4 sm:grid-cols-2"
+          data-search-empty-ctas
+        >
+          <div>
+            <p class="font-semibold">Already have a product?</p>
+            <p class="text-sm text-ink-2">Paste its product page to see what it states.</p>
+            <form method="post" action="/analyse" class="mt-2 flex gap-2">
+              <label for="search-analyse" class="sr-only">
+                Product URL
+              </label>
+              <input
+                id="search-analyse"
+                name="url"
+                type="url"
+                required
+                placeholder="https://…"
+                class="h-10 min-w-0 flex-1 border border-ink bg-paper px-2"
+              />
+              <input type="hidden" name="action" value="analyse" />
+              <button class="btn btn-quiet min-h-10">Analyse</button>
+            </form>
+          </div>
+          <div>
+            <p class="font-semibold">Don’t see your supplement?</p>
+            <p class="text-sm text-ink-2">Send us the front and back of the label.</p>
+            <p class="mt-2">
+              <a href="/submit" class="btn btn-quiet">
+                Send a label
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
       <p data-state="error" hidden class="notice">
         Search couldn’t load. Check your connection and try again, or browse{' '}
@@ -96,7 +124,9 @@ const browse = [
 </BaseLayout>
 
 <script>
+  import { initFormulaFilters } from '@/components/comparison/formula-filters';
   import { loadEngine, TYPE_LABEL } from '@/components/search/search-client';
+  import { normalize } from '@/lib/search/engine';
   import { track } from '@/lib/analytics/events';
   import type { SearchDocument } from '@/lib/content/types';
 
@@ -104,8 +134,16 @@ const browse = [
   const input = document.querySelector<HTMLInputElement>('#page-search')!;
   const states = root.querySelectorAll<HTMLElement>('[data-state]');
   const show = (name: string) => states.forEach((el) => (el.hidden = el.dataset.state !== name));
-  const ORDER: SearchDocument['type'][] = ['product', 'ingredient', 'comparison', 'brand', 'guide'];
+  const ORDER: SearchDocument['type'][] = [
+    'goal',
+    'product',
+    'ingredient',
+    'comparison',
+    'brand',
+    'guide',
+  ];
   const GROUP: Record<SearchDocument['type'], string> = {
+    goal: 'Goals',
     product: 'Products',
     ingredient: 'Ingredients',
     comparison: 'Comparisons',
@@ -126,7 +164,47 @@ const browse = [
     return node;
   }
 
+  // ── Formula comparison for ingredient queries ("magnesium", "bisglycinate") ──
+  type ComparisonEntry = { slug: string; name: string; terms: string[]; count: number };
+  const slot = document.querySelector<HTMLElement>('[data-comparison-slot]')!;
+  let comparisonIndex: Promise<ComparisonEntry[]> | undefined;
+  const loadComparisonIndex = () =>
+    (comparisonIndex ??= fetch('/comparison-index.json')
+      .then((r) => (r.ok ? (r.json() as Promise<ComparisonEntry[]>) : []))
+      .catch(() => []));
+  let shownSlug: string | null = null;
+
+  async function showComparison(query: string) {
+    const q = normalize(query);
+    const entries = q ? await loadComparisonIndex() : [];
+    const hit = entries.find((e) =>
+      e.terms.some(
+        (t) => t === q || t.split(' ').includes(q) || (q.length >= 4 && t.startsWith(q)),
+      ),
+    );
+    if (!hit) {
+      slot.hidden = true;
+      slot.replaceChildren();
+      shownSlug = null;
+      return;
+    }
+    if (hit.slug === shownSlug) return;
+    try {
+      const res = await fetch(`/partials/compare/${hit.slug}`);
+      if (!res.ok) throw new Error(String(res.status));
+      // Trusted, same-origin, build-time HTML fragment.
+      slot.innerHTML = await res.text();
+      slot.hidden = false;
+      shownSlug = hit.slug;
+      initFormulaFilters(slot);
+      track('comparison_view', { ingredient: hit.slug, from: 'search' });
+    } catch {
+      slot.hidden = true;
+    }
+  }
+
   async function run(q: string) {
+    void showComparison(q);
     const query = q.trim();
     const url = new URL(location.href);
     if (query) url.searchParams.set('q', query);
@@ -137,7 +215,7 @@ const browse = [
     try {
       const engine = await loadEngine();
       const hits = engine.search(query, { limit: 60 });
-      track('search', { search_term: query, results: hits.length });
+      track('search', { from: 'page', results: hits.length });
       if (!hits.length) {
         root.querySelector('[data-query]')!.textContent = `“${query}”`;
         return show('empty');
@@ -188,7 +266,25 @@ const browse = [
 
   const initial = new URL(location.href).searchParams.get('q') ?? '';
   input.value = initial;
-  void run(initial);
+  // A query that is exactly a published goal ("sleep", "gut health") opens
+  // the goal page; everything else keeps the existing search/comparison.
+  void (async () => {
+    if (initial.trim()) {
+      try {
+        const engine = await loadEngine();
+        const q = normalize(initial).replace(/&/g, ' ').replace(/\s+/g, ' ').trim();
+        const goal = engine
+          .search(initial, { limit: 3, type: 'goal' })
+          .find(
+            (h) => h.doc.keywords.some((k) => normalize(k) === q) || normalize(h.doc.title) === q,
+          );
+        if (goal) return location.replace(goal.doc.url);
+      } catch {
+        /* fall through to normal search */
+      }
+    }
+    void run(initial);
+  })();
 
   let timer: number | undefined;
   input.addEventListener('input', () => {

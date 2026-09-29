@@ -1,0 +1,258 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+import {
+  NOT_DISCLOSED,
+  presentComparisonRow,
+  showsElemental,
+  type ComparisonRow,
+} from '@/lib/comparison';
+import { VEG } from '@/lib/editorial/meta';
+
+/**
+ * Formula comparison for one ingredient. Facts side by side, alphabetical,
+ * no ranking, no "best". Compound and elemental amounts are separate,
+ * labelled columns; missing values read "Not disclosed".
+ */
+interface Props {
+  rows: ComparisonRow[];
+  ingredientName: string;
+}
+const { rows, ingredientName } = Astro.props;
+const views = rows.map(presentComparisonRow);
+const elemental = showsElemental(rows);
+const forms = [...new Set(views.map((v) => v.filter.form).filter(Boolean))].sort();
+const vegs = [...new Set(views.map((v) => v.filter.veg))];
+const muted = (v: string) =>
+  v === NOT_DISCLOSED || /^No price|not disclosed|Not calculable/i.test(v);
+const lower = ingredientName.toLowerCase();
+---
+
+<div data-formula-comparison class="text-sm">
+  <form
+    class="mb-4 grid grid-cols-2 items-end gap-x-3 gap-y-2 border-y border-ink bg-sheet p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+    onsubmit="return false"
+  >
+    <label class="block">
+      <span class="caption block text-ink-3">Form</span>
+      <select data-filter="form" class="mt-1 h-9 w-full border border-ink bg-paper px-2">
+        <option value="">All forms</option>
+        {forms.map((f) => (
+          <option value={f}>{f}</option>
+        ))}
+      </select>
+    </label>
+    <label class="block">
+      <span class="caption block text-ink-3">Veg status</span>
+      <select data-filter="veg" class="mt-1 h-9 w-full border border-ink bg-paper px-2">
+        <option value="">Any</option>
+        {vegs.map((v) => (
+          <option value={v}>{VEG[v as keyof typeof VEG].label}</option>
+        ))}
+      </select>
+    </label>
+    <label class="block">
+      <span class="caption block text-ink-3">Max ₹ per serving</span>
+      <input
+        data-filter="price"
+        type="number"
+        inputmode="decimal"
+        min="0"
+        step="1"
+        placeholder="Any"
+        class="num mt-1 h-9 w-full border border-ink bg-paper px-2 font-mono"
+      />
+    </label>
+    <div class="text-right">
+      <button type="button" data-filter-reset class="caption text-ink-2 underline hover:text-ink">
+        Reset
+      </button>
+      <p data-filter-status class="caption mt-1 text-ink-3" aria-live="polite">
+        Showing {views.length} of {views.length}
+      </p>
+    </div>
+  </form>
+
+  <p class="mb-3 max-w-(--container-prose) text-xs text-ink-3">
+    Listed alphabetically. Not ranked.
+    {elemental && (
+      <>
+        {' '}
+        <strong class="font-semibold text-ink-2">Compound</strong> is the weight of the declared
+        form (e.g. {lower} bisglycinate);{' '}
+        <strong class="font-semibold text-ink-2">elemental</strong> is the amount of {lower} itself,
+        shown only when the label declares it.
+      </>
+    )}{' '}
+    Amounts are per serving, as declared on the label.
+  </p>
+
+  <!-- ≥ lg: dense table -->
+  <div class="hidden overflow-x-auto lg:block">
+    <table class="facts min-w-[64rem] text-xs">
+      <caption class="sr-only">
+        Products containing{ingredientName}, compared on label facts
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Product</th>
+          <th scope="col">Serving</th>
+          <th scope="col">Form</th>
+          <th scope="col" class="n">
+            Compound / serving
+          </th>
+          {elemental && (
+            <th scope="col" class="n">
+              Elemental / serving
+            </th>
+          )}
+          <th scope="col">Actives</th>
+          <th scope="col" class="n">
+            Observed price
+          </th>
+          <th scope="col" class="n">
+            ₹ / serving
+          </th>
+          {elemental && (
+            <th scope="col" class="n">
+              ₹ / 100 mg elemental
+            </th>
+          )}
+          <th scope="col">Veg</th>
+          <th scope="col">Label</th>
+          <th scope="col">Pack vs web</th>
+        </tr>
+      </thead>
+      <tbody>
+        {views.map((v) => (
+          <tr
+            data-row={v.id}
+            data-form={v.filter.form}
+            data-veg={v.filter.veg}
+            data-pps={v.filter.pricePerServing ?? ''}
+          >
+            <th scope="row" class="py-3 pr-3 text-left font-normal">
+              <span class="caption block text-ink-3">{v.brand}</span>
+              <a href={v.href} class="link font-semibold text-ink">
+                {v.product}
+              </a>
+              {v.variant && <span class="block text-ink-3">{v.variant}</span>}
+            </th>
+            <td>{v.serving}</td>
+            <td class:list={[muted(v.form) && 'text-ink-3']}>{v.form}</td>
+            <td class:list={['n font-mono', muted(v.compound) && 'text-ink-3']}>{v.compound}</td>
+            {elemental && (
+              <td class:list={['n font-mono', muted(v.elemental) ? 'text-ink-3' : 'font-semibold']}>
+                {v.elemental}
+              </td>
+            )}
+            <td class="text-ink-2">{v.activeCount}</td>
+            <td class:list={['n', muted(v.price) && 'text-ink-3']}>{v.price}</td>
+            <td class:list={['n font-mono', muted(v.pricePerServing) && 'text-ink-3']}>
+              {v.pricePerServing}
+            </td>
+            {elemental && (
+              <td class:list={['n font-mono', muted(v.pricePer100MgElemental) && 'text-ink-3']}>
+                {v.pricePer100MgElemental}
+              </td>
+            )}
+            <td>
+              <VegMark status={v.veg.status} withLabel class="whitespace-nowrap" />
+            </td>
+            <td>
+              <span class="tag" title={v.verification.description}>
+                {v.verification.label}
+              </span>
+            </td>
+            <td class:list={[v.discrepancies.count ? 'font-semibold' : 'text-ink-3']}>
+              {v.discrepancies.count ? (
+                <a href={`${v.href}#differences`} class="link">
+                  {v.discrepancies.label}
+                </a>
+              ) : (
+                v.discrepancies.label
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- < lg: one block per product -->
+  <ol class="border-t-[3px] border-ink lg:hidden">
+    {views.map((v) => (
+      <li
+        class="border-b border-line py-4"
+        data-row={v.id}
+        data-form={v.filter.form}
+        data-veg={v.filter.veg}
+        data-pps={v.filter.pricePerServing ?? ''}
+      >
+        <p class="caption flex items-center gap-1.5 text-ink-3">
+          <VegMark status={v.veg.status} size={11} />
+          {v.brand}
+        </p>
+        <a href={v.href} class="mt-0.5 block leading-snug font-semibold">
+          {v.product}
+        </a>
+        {v.variant && <p class="text-xs text-ink-3">{v.variant}</p>}
+        <dl class="num mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
+          <div>
+            <dt class="text-ink-3">Serving</dt>
+            <dd class="font-medium">{v.serving}</dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">Form</dt>
+            <dd class:list={['font-medium', muted(v.form) && 'text-ink-3']}>{v.form}</dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">Compound / serving</dt>
+            <dd class:list={['font-mono', muted(v.compound) && 'text-ink-3']}>{v.compound}</dd>
+          </div>
+          {elemental && (
+            <div>
+              <dt class="text-ink-3">Elemental / serving</dt>
+              <dd class:list={['font-mono', muted(v.elemental) ? 'text-ink-3' : 'font-semibold']}>
+                {v.elemental}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt class="text-ink-3">₹ / serving</dt>
+            <dd class:list={['font-mono', muted(v.pricePerServing) && 'text-ink-3']}>
+              {v.pricePerServing}
+            </dd>
+          </div>
+          {elemental && (
+            <div>
+              <dt class="text-ink-3">₹ / 100 mg elemental</dt>
+              <dd class:list={['font-mono', muted(v.pricePer100MgElemental) && 'text-ink-3']}>
+                {v.pricePer100MgElemental}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt class="text-ink-3">Actives</dt>
+            <dd>{v.activeCount}</dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">Label</dt>
+            <dd>{v.verification.label}</dd>
+          </div>
+          <div>
+            <dt class="text-ink-3">Pack vs web</dt>
+            <dd class:list={[!v.discrepancies.count && 'text-ink-3']}>{v.discrepancies.label}</dd>
+          </div>
+        </dl>
+        <p class="mt-2 text-xs text-ink-3">
+          {v.price} · {v.veg.label}
+        </p>
+      </li>
+    ))}
+  </ol>
+</div>
+
+<script>
+  import { initFormulaFilters } from './formula-filters';
+  initFormulaFilters();
+</script>

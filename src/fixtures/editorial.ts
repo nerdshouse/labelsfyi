@@ -1,5 +1,7 @@
 import type { RawDoc } from './helpers.ts';
 import { keyedRef, published, pt, ref, slug, weakRef } from './helpers.ts';
+import { MAGNESIUM_IDS } from './magnesium.ts';
+import { GOAL_IDS, GOAL_PRODUCT_IDS } from './goals.ts';
 import { PRODUCT_IDS } from './products.ts';
 
 /**
@@ -197,9 +199,10 @@ const review = (
 });
 
 export const reviews: RawDoc[] = [
-  ...PRODUCT_IDS.filter((id) => id !== 'product.sampleworks-whey').map((id) =>
-    review(id, '2026-09-21', '2027-03-21'),
-  ),
+  ...GOAL_IDS.map((id) => review(id, '2026-09-26', '2027-03-26', `goal-${id.slice(5)}`)),
+  ...[...PRODUCT_IDS, ...MAGNESIUM_IDS, ...GOAL_PRODUCT_IDS]
+    .filter((id) => id !== 'product.sampleworks-whey')
+    .map((id) => review(id, '2026-09-21', '2027-03-21')),
   // Deliberately overdue: exercises the "review due" state.
   review('product.sampleworks-whey', '2026-02-20', '2026-08-01'),
   ...[

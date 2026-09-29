@@ -1,11 +1,20 @@
 ---
 import WhereToBuy from '@/components/affiliate/WhereToBuy.astro';
+import Discrepancies from '@/components/editorial/Discrepancies.astro';
+import SourceObservations from '@/components/product/SourceObservations.astro';
+import WhatsInside from '@/components/product/WhatsInside.astro';
+import { productDecoder } from '@/lib/comparison';
+import { buildReceipt } from '@/lib/receipt/receipt';
+import { comparePath } from '@/lib/comparison/compare-two';
+import { labelVerification } from '@/lib/editorial/evidence';
+import { LABEL_VERIFICATION } from '@/lib/editorial/meta';
 import ClaimList from '@/components/editorial/ClaimList.astro';
 import ReviewerBlock from '@/components/editorial/ReviewerBlock.astro';
 import ReviewLine from '@/components/editorial/ReviewLine.astro';
 import SourceList from '@/components/editorial/SourceList.astro';
 import UpdateHistory from '@/components/editorial/UpdateHistory.astro';
 import AtAGlance from '@/components/product/AtAGlance.astro';
+import ProductDimensions from '@/components/product/ProductDimensions.astro';
 import CostBreakdown from '@/components/product/CostBreakdown.astro';
 import LabelPanel from '@/components/product/LabelPanel.astro';
 import PackVisual from '@/components/product/PackVisual.astro';
@@ -70,6 +79,38 @@ const peers = comparison?.products.filter((x) => x._id !== p._id) ?? [];
 const related = p.related.filter((r) => !peers.some((x) => x._id === r._id));
 
 const fullName = `${p.brand.name} ${p.name}`;
+// Compare Two Labels: same-category products first, then the rest.
+// Compare with: products sharing an active ingredient first, then a goal,
+// then the category, then the rest (the comparison itself never treats
+// different ingredients as equivalent).
+const myIngredients = new Set(p.ingredients.map((i) => i._id));
+const myGoals = new Set(
+  graph.goals.filter((g) => g.memberships.some((m) => m.productId === p._id)).map((g) => g._id),
+);
+const affinity = (o: typeof p) =>
+  o.ingredients.some((i) => myIngredients.has(i._id))
+    ? 0
+    : graph.goals.some(
+          (g) => myGoals.has(g._id) && g.memberships.some((m) => m.productId === o._id),
+        )
+      ? 1
+      : o.category?._id === p.category?._id
+        ? 2
+        : 3;
+const compareOptions = graph.products
+  .filter((o) => o._id !== p._id)
+  .sort(
+    (a, b) =>
+      affinity(a) - affinity(b) ||
+      a.brand.name.localeCompare(b.brand.name) ||
+      a.name.localeCompare(b.name),
+  );
+const updateLabelHref = `/submit?${new URLSearchParams({
+  product: p.slug,
+  brand: p.brand.name,
+  name: p.name,
+  ...(p.variant ? { variant: p.variant } : {}),
+})}`;
 const perServing = keyPerServing(p);
 const description =
   p.seoDescription ??
@@ -80,8 +121,16 @@ const crumbs = [
   ...(p.category ? [{ name: p.category.name, href: routes.category(p.category.slug) }] : []),
   { name: p.name, href: routes.product(p.slug) },
 ];
+const decoder = productDecoder(p);
+const receipt = buildReceipt(p);
+const verification = LABEL_VERIFICATION[labelVerification(p)];
 const nav = [
+  { id: 'inside', label: 'What’s inside' },
   { id: 'label', label: 'Label' },
+  { id: 'sources-compared', label: 'Pack vs web' },
+  ...(p.discrepancies.length
+    ? [{ id: 'differences', label: `Differences (${p.discrepancies.length})` }]
+    : []),
   { id: 'veg', label: 'Veg status' },
   { id: 'claims', label: `Claims (${currentClaimCount})` },
   { id: 'cost', label: 'Cost' },
@@ -141,6 +190,26 @@ const nav = [
             keep the page as a record of its last known label.
           </p>
         )}
+        <p class="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-2">
+          <span class="tag tag-ink">{verification.label}</span>
+          <span>{verification.description}</span>
+          {receipt && (
+            <a href={receipt.href} class="link ml-auto font-medium">
+              Supplement receipt →
+            </a>
+          )}
+        </p>
+        <div class="mt-6">
+          <ProductDimensions product={p} />
+        </div>
+        <p class="mt-3 flex flex-wrap gap-x-4 text-sm">
+          <a href="#buy" class="link font-medium">
+            Where to buy →
+          </a>
+          <a href="#compare" class="link">
+            Compare with another product
+          </a>
+        </p>
         {labelChanged && (
           <p class="notice mt-4" role="note">
             <strong class="font-semibold text-ink">The label has changed.</strong> This page
@@ -164,8 +233,13 @@ const nav = [
   <InPageNav items={nav} />
 
   <div class="page mt-12 space-y-20">
+    <section>
+      <SectionHead id="inside" kicker="01 · What’s inside" title="What’s inside, per serving" />
+      <WhatsInside decoder={decoder} />
+    </section>
+
     <section aria-labelledby="label-h">
-      <SectionHead id="label" kicker="01 · The label" title="What the label says" />
+      <SectionHead id="label" kicker="02 · The label" title="The label, as printed" />
       {currentPanels.length ? (
         <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
           <div class="space-y-6">
@@ -243,23 +317,43 @@ const nav = [
       )}
     </section>
 
+    <section>
+      <SectionHead
+        id="sources-compared"
+        kicker="03 · Sources"
+        title="Pack vs website vs marketplace"
+      />
+      <SourceObservations decoder={decoder} sourceNumbers={sourceNumbers} />
+    </section>
+
+    {p.discrepancies.length > 0 && (
+      <section>
+        <SectionHead
+          id="differences"
+          kicker="04 · Differences"
+          title="Where the sources disagree"
+        />
+        <Discrepancies discrepancies={p.discrepancies} sourceNumbers={sourceNumbers} />
+      </section>
+    )}
+
     <section aria-labelledby="veg-h">
-      <SectionHead id="veg" kicker="02 · Veg status" title="Is it vegetarian?" />
+      <SectionHead id="veg" kicker="Veg status" title="Is it vegetarian?" />
       <VegStatusBlock product={p} sourceNumbers={sourceNumbers} />
     </section>
 
     <section>
-      <SectionHead id="claims" kicker="03 · Claims" title="Label claims vs. the evidence" />
+      <SectionHead id="claims" kicker="Claims" title="Label claims vs. the evidence" />
       <ClaimList claims={p.claims} sourceNumbers={sourceNumbers} />
     </section>
 
     <section>
-      <SectionHead id="cost" kicker="04 · Cost" title="What it actually costs" />
+      <SectionHead id="cost" kicker="Cost" title="What it actually costs" />
       <CostBreakdown product={p} doseBasis={doseBasis} amountPerServing={amountPerServing} />
     </section>
 
     <section>
-      <SectionHead id="compare" kicker="05 · Compare" title="How it compares">
+      <SectionHead id="compare" kicker="Compare" title="How it compares">
         {comparison && (
           <a
             slot="aside"
@@ -287,9 +381,48 @@ const nav = [
         <div class="mt-8">
           <p class="caption mb-1 text-ink-3">More in {p.category?.name ?? 'this category'}</p>
           {related.map((x) => (
-            <ProductRow product={x} />
+            <div>
+              <ProductRow product={x} />
+              <p class="-mt-2 mb-2 text-right text-sm">
+                <a href={comparePath(p.slug, x.slug)} class="link" data-compare-link>
+                  Compare labels →
+                </a>
+              </p>
+            </div>
           ))}
         </div>
+      )}
+      {compareOptions.length > 0 && (
+        <form
+          method="get"
+          action="/api/compare"
+          class="mt-8 border-2 border-ink bg-sheet p-4"
+          data-compare-select
+        >
+          <input type="hidden" name="a" value={p.slug} />
+          <label for="compare-b" class="font-semibold">
+            Compare this label with another product
+          </label>
+          <p class="text-sm text-ink-3">
+            Shows what differs between the two labels. No scores or rankings.
+          </p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <select
+              id="compare-b"
+              name="b"
+              required
+              class="h-11 min-w-0 flex-1 border border-ink bg-paper px-2"
+            >
+              <option value="">Choose a product…</option>
+              {compareOptions.map((o) => (
+                <option value={o.slug}>
+                  {o.brand.name} · {o.name}
+                </option>
+              ))}
+            </select>
+            <button class="btn btn-primary">Compare</button>
+          </div>
+        </form>
       )}
       {!comparison && related.length === 0 && (
         <EmptyState title="Nothing to compare yet">
@@ -317,17 +450,17 @@ const nav = [
     </section>
 
     <section>
-      <SectionHead id="buy" kicker="06 · Retailers" title="Where to buy" />
+      <SectionHead id="buy" kicker="Retailers" title="Where to buy" />
       <WhereToBuy product={p} />
     </section>
 
     <section>
-      <SectionHead id="sources" kicker="07 · Sources" title="Sources" />
+      <SectionHead id="sources" kicker="Sources" title="Sources" />
       <SourceList sources={sources} />
     </section>
 
     <section>
-      <SectionHead id="history" kicker="08 · Provenance" title="Review & update history" />
+      <SectionHead id="history" kicker="Review & provenance" title="Review & update history" />
       <ReviewerBlock meta={p} />
       <div class="mt-10">
         <UpdateHistory events={productHistory(p)} />
@@ -340,14 +473,20 @@ const nav = [
           Corrections policy
         </a>
       </p>
+      <p class="mt-4 text-sm" data-update-label>
+        Has the label changed?{' '}
+        <a href={updateLabelHref} class="link font-medium">
+          Submit an updated label
+        </a>
+        . A new label is added as a new dated record; earlier labels stay in this history.
+      </p>
     </section>
   </div>
 
-  <div hidden data-product-view={p._id} data-product-slug={p.slug}></div>
+  <div hidden data-product-view={p.slug}></div>
   <script>
     import { track } from '@/lib/analytics/events';
     const el = document.querySelector<HTMLElement>('[data-product-view]');
-    if (el)
-      track('product_view', { product: el.dataset.productView, slug: el.dataset.productSlug });
+    if (el) track('product_view', { slug: el.dataset.productView });
   </script>
 </BaseLayout>

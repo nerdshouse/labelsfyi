@@ -17,6 +17,7 @@ export type ExtractionMethod = 'manual' | 'structured_data' | 'parser' | 'ocr' |
 export type ExtractedField =
   | 'name'
   | 'brand'
+  | 'gtin'
   | 'variant'
   | 'pack_size'
   | 'serving_size'

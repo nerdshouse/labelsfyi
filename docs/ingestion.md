@@ -4,6 +4,16 @@
 > queue, OCR, AI integration or database** in this repository. Nothing has been fetched from any real
 > website. Demo ingestion records use the reserved `.example` domain.
 
+> **Principles**
+>
+> 1. **Web content is discovery/input. Label evidence and verified observations are the basis for
+>    published product facts.**
+> 2. **More ingredients or a higher dose is not automatically a quality judgment.** labels.fyi exposes
+>    form, amount, transparency, evidence and cost so users can make their own comparisons. No scores,
+>    ranks or "best" lists.
+> 3. **Brand responses are preserved as provenance and clarification, not treated as automatic
+>    editorial approval.**
+
 ## Hard prerequisite: isolated, private data
 
 **No real external data may be ingested until ingestion data is isolated from public read access.**
@@ -202,3 +212,48 @@ The current schemas support it.
 
 Crawling/fetching of any site, adapters for specific brands or retailers, scheduling, queues, object
 storage, OCR, AI calls, the side-by-side review UI, automatic observation creation, and any database.
+
+## Findings from experiment 1 and what changed
+
+The first research-only run (10 products, 141 facts) found that:
+
+- about 56% of label facts were only in images
+- 8 of 10 products had page-vs-label differences
+- name-token matching produced false positives
+- barcodes were present on every product
+
+In response:
+
+- **GTIN** fields (`productReference`, `priceSnapshot`, `ingestionCandidate`) and GTIN-first matching.
+- **Brand-gated matcher** with generic-word removal. Regression tests cover the observed false
+  positives ("Daily Probiotic Slow" vs "PCOS Balance Slow", "Hydrasalt" vs "Multivitamins") and the
+  sibling case (Creatine Monohydrate vs Creatine Monohydrate + HCl).
+- **Image classification** (`imageKind`, `depictsExactProduct`). Panels built from images must use a
+  confirmed pack photo or print artwork.
+- **Source-specific observations** (`sourceType`, `sourceLocator`, `extractionMethod`,
+  `verificationStatus`) and `sourceLocator` on extracted facts.
+- **Compound vs elemental** amounts and **structured servings**.
+- **Discrepancy** and **BrandResponse** entities for website-vs-pack differences.
+
+Still not built: crawler, OCR, AI calls, queue, workers, object storage, database.
+
+## Label submissions
+
+People can submit label photos directly (`/submit`). Each submission becomes a `labelSubmission`
+(private) and an `ingestionCandidate` with `submission` set instead of a `dataSource` snapshot. The
+submitted brand, name and variant are **unverified facts**, the same Layer A as scraped data. The
+same rules apply: a person confirms the match, verifies each fact against the photo, and records
+Layer B observations. The private-dataset prerequisite above is enforced in code
+(`SUBMISSIONS_PRIVATE_DATASET`). Full design: [submissions.md](./submissions.md).
+
+## Product URL analyser (Sprint 7)
+
+`/analyse` → `analyseUrl` (`src/lib/analyse/`): validate the URL → source register (fail closed)
+→ robots.txt → controlled fetch → extract facts → show results as **UNVERIFIED**. "Submit for
+verification" re-runs the analysis on the server and writes `dataSource` + `sourceSnapshot` (no
+excerpt, no images) + `ingestionCandidate` (`extractor: url-analyser@1`, all facts `unverified`,
+possible matches from the strict matcher, never confirmed) to the private store. It never creates
+a Product. Extraction order: JSON-LD Product (name, brand, sku, GTIN, offer price; **never**
+description, image, review or rating) → meta tags → visible facts (serving lines,
+supplement-facts table rows, "X mg of Y per tablet"). No OCR on images. Security:
+docs/security.md. Policy: docs/source-policy.md.

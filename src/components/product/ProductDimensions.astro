@@ -1,0 +1,37 @@
+---
+import type { ProductDetail } from '@/lib/content/types';
+import { productDimensions } from '@/lib/catalogue/consumer';
+import { BUILD_TIME } from '@/lib/editorial/review';
+
+/**
+ * "Quality", decomposed: each factual dimension with its own plain value.
+ * Deliberately no total, score, grade or rank.
+ */
+interface Props {
+  product: ProductDetail;
+}
+const dims = productDimensions(Astro.props.product, BUILD_TIME);
+---
+
+<div data-dimensions>
+  <table class="facts w-full text-sm [&_th]:text-left">
+    <caption class="caption pb-1 text-left text-ink-3">
+      Label facts at a glance · no overall score
+    </caption>
+    <tbody>
+      {dims.map((d) => (
+        <tr data-dimension={d.key}>
+          <th scope="row" class="w-[45%] font-medium">
+            {d.label}
+          </th>
+          <td>
+            <span class="inline-block w-4 font-mono">
+              {d.state === 'ok' ? '✓' : d.state === 'attention' ? '⚠' : '·'}
+            </span>
+            {d.value}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>

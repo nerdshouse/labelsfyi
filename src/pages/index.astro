@@ -45,7 +45,13 @@ const explore = [
   },
   { href: '/guides', label: 'Guides', count: guides.length, note: 'How to read a label' },
 ];
-const tries = ['creatine', 'whey protein', 'vitamin D3', 'ashwagandha'];
+const tries = ['magnesium', 'melatonin', 'creatine', 'vitamin D3', 'B12'];
+// Goal discovery: every published goal, with how many products it lists.
+const goalTiles = graph.goals.map((g) => ({
+  name: g.name,
+  href: `/${g.slug}`,
+  count: g.memberships.length,
+}));
 ---
 
 <BaseLayout description={SITE.description} canonicalPath="/" jsonLd={[website()]} hideHeaderSearch>
@@ -54,25 +60,67 @@ const tries = ['creatine', 'whey protein', 'vitamin D3', 'ashwagandha'];
     <div>
       <p class="caption text-ink-3">labels.fyi · Supplement label intelligence for India</p>
       <h1 class="display mt-5">
-        Decode the label. Know what’s <span class="marker">actually</span> inside.
+        Find a supplement. Understand what’s inside. <span class="marker">Compare</span> before you
+        buy.
       </h1>
       <p class="lede mt-6 max-w-xl">
-        Evidence-based breakdowns of supplement labels, ingredients, claims and prices, built for
-        Indian consumers.
+        Decode the label. Compare the formula. Check the claims. Independent label facts, dated
+        prices and where to buy, for supplements sold in India.
       </p>
       <div class="mt-8 max-w-2xl">
         <SearchBox variant="hero" id="hero-search" />
         <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
-          <span class="caption">Try</span>
+          <span class="caption">Popular searches</span>
           {tries.map((t) => (
             <a href={routes.search(t)} class="link text-ink-2">
               {t}
             </a>
           ))}
         </p>
+        <form
+          method="post"
+          action="/analyse"
+          class="mt-6 flex max-w-2xl flex-wrap gap-2"
+          data-home-analyse
+        >
+          <label for="home-analyse" class="w-full text-sm font-semibold">
+            Already looking at a product? Paste its URL
+          </label>
+          <input
+            id="home-analyse"
+            name="url"
+            type="url"
+            required
+            placeholder="https://brand.example/products/…"
+            class="h-11 min-w-0 flex-1 border border-ink bg-sheet px-3"
+          />
+          <input type="hidden" name="action" value="analyse" />
+          <button class="btn btn-quiet h-11">Analyse product →</button>
+        </form>
       </div>
     </div>
     <div class="lg:pt-6">{hero && <DecodedLabel product={hero} />}</div>
+  </section>
+
+  <!-- How it works -->
+  <section class="page mb-10" aria-labelledby="how-h" data-how-it-works>
+    <h2 id="how-h" class="caption rule-heavy pt-3 text-ink-3">
+      How labels.fyi works
+    </h2>
+    <ol class="mt-3 grid grid-cols-2 gap-px border-2 border-ink bg-ink sm:grid-cols-4">
+      {[
+        ['1', 'Search', 'An ingredient, a goal or a product.'],
+        ['2', 'Decode', 'What the label actually declares, with its source.'],
+        ['3', 'Compare', 'Amounts, forms, servings and price, side by side.'],
+        ['4', 'Buy', 'Where it is sold, with dated prices. You decide.'],
+      ].map(([n, t, d]) => (
+        <li class="bg-sheet p-3">
+          <span class="num font-mono text-xs text-ink-3">{n}</span>
+          <p class="font-semibold">{t}</p>
+          <p class="text-xs text-ink-2">{d}</p>
+        </li>
+      ))}
+    </ol>
   </section>
 
   <!-- Explore -->
@@ -102,6 +150,44 @@ const tries = ['creatine', 'whey protein', 'vitamin D3', 'ashwagandha'];
       ))}
     </ul>
   </nav>
+
+  {goalTiles.length > 0 && (
+    <section class="page mt-14" aria-labelledby="goals-h" data-goal-tiles>
+      <p class="caption text-ink-3">Browse by goal</p>
+      <h2 id="goals-h" class="h2 mt-1">
+        What are you looking for?
+      </h2>
+      <ul class="mt-5 grid grid-cols-2 border-t-2 border-l-2 border-ink sm:grid-cols-3 lg:grid-cols-5">
+        {goalTiles.map((g) => (
+          <li class="border-r-2 border-b-2 border-ink">
+            <a
+              href={g.href}
+              class="group flex h-full flex-col justify-between gap-3 bg-sheet px-3 py-4 hover:bg-marker-soft"
+              data-goal-tile={g.href}
+            >
+              <span class="font-mono text-sm font-semibold tracking-wide uppercase group-hover:underline">
+                {g.name}
+              </span>
+              <span class="text-xs text-ink-3">
+                {g.count ? (
+                  <>
+                    <span class="num font-mono text-ink">{g.count}</span> product
+                    {g.count === 1 ? '' : 's'}
+                  </>
+                ) : (
+                  'No products yet'
+                )}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p class="mt-4 text-sm text-ink-2">
+        Compare supplements. Don’t just trust the front of the bottle. Goals group products by how
+        they are marketed; they are not medical advice.
+      </p>
+    </section>
+  )}
 
   <div class="page mt-16 grid gap-16 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14">
     <section>

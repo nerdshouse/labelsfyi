@@ -12,3 +12,8 @@ sanity/.sanity/
 coverage/
 demo-dataset.ndjson
 .claude/settings.local.json
+.dev.vars
+.data/
+
+# Research imports are private, UNVERIFIED third-party data: never commit them.
+research/catalogue/*.ndjson

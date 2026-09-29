@@ -1,5 +1,6 @@
 import type { RawDoc } from './helpers.ts';
 import { key, keyedRef, published, qty, ref, slug } from './helpers.ts';
+import { parseServing } from '../lib/identity/serving.ts';
 
 /**
  * FICTIONAL demo products. Every brand, product, label, claim, price and link
@@ -10,6 +11,11 @@ import { key, keyedRef, published, qty, ref, slug } from './helpers.ts';
 
 const docs: RawDoc[] = [];
 const push = (d: RawDoc) => {
+  // Structured serving derived from the (fictional) printed serving text.
+  if (typeof d.servingSizeText === 'string' && d.serving === undefined) {
+    const spec = parseServing(d.servingSizeText);
+    if (spec) d.serving = { _type: 'servingSpec', ...spec };
+  }
   docs.push(d);
   return d;
 };
@@ -113,6 +119,9 @@ const claim = (c: ClaimInput) =>
     reviewer: ref('reviewer.demo'),
     reviewedAt: c.reviewedAt,
     order: c.order,
+    claimSourceType: 'PHYSICAL_PACK',
+    claimSourceLocator: c.location,
+    researchStatus: 'EVIDENCE_IDENTIFIED',
     observedAt: c.observedAt ? `${c.observedAt}T10:00:00Z` : null,
     observation: c.observation ? ref(c.observation) : null,
     status: c.supersededAt ? 'superseded' : 'current',
@@ -140,6 +149,9 @@ const observation = (o: {
     source: ref(o.source),
     observedAt: `${o.observedAt}T10:00:00Z`,
     observedBy: 'labels.fyi editorial (demo)',
+    sourceType: 'PHYSICAL_PACK',
+    extractionMethod: 'manual',
+    verificationStatus: 'verified',
     notes: o.notes ?? null,
     supersededBy: o.supersededBy ? ref(o.supersededBy) : null,
     supersededAt: o.supersededAt ? `${o.supersededAt}T10:00:00Z` : null,
@@ -200,8 +212,14 @@ const offer = (o: {
     isDemo: true,
   });
 
+// Demo panels are transcribed from the (fictional) physical pack.
 const panel = (p: RawDoc) =>
-  push({ isDemo: true, capturedBy: 'labels.fyi editorial (demo)', ...p });
+  push({
+    isDemo: true,
+    capturedBy: 'labels.fyi editorial (demo)',
+    sourceType: 'PHYSICAL_PACK',
+    ...p,
+  });
 
 // ─── P1 · Specimen Nutrition Creatine Monohydrate ─────────────────────────
 
@@ -491,6 +509,7 @@ push({
   _id: P2,
   _type: 'product',
   name: 'Micronised Creatine, Lemon Iced Tea',
+  variant: 'Lemon Iced Tea',
   slug: slug('sampleworks-micronised-creatine-lemon-iced-tea'),
   featured: true,
   brand: ref('brand.sampleworks'),
@@ -785,6 +804,7 @@ push({
   _id: P4,
   _type: 'product',
   name: 'Whey Protein Concentrate, Rich Chocolate',
+  variant: 'Rich Chocolate',
   slug: slug('specimen-nutrition-whey-protein-concentrate-rich-chocolate'),
   featured: true,
   brand: ref('brand.specimen'),
@@ -1028,6 +1048,7 @@ push({
   _id: P5,
   _type: 'product',
   name: 'Whey Blend, French Vanilla',
+  variant: 'French Vanilla',
   slug: slug('sampleworks-whey-blend-french-vanilla'),
   brand: ref('brand.sampleworks'),
   category: ref('category.protein-powder'),
@@ -1163,6 +1184,7 @@ push({
   _id: P6,
   _type: 'product',
   name: 'Vitamin D3 2000 IU Softgels',
+  variant: '2000 IU',
   slug: slug('testbed-sports-vitamin-d3-2000-iu-softgels'),
   featured: true,
   brand: ref('brand.testbed'),

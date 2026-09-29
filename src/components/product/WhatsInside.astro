@@ -1,0 +1,107 @@
+---
+import EmptyState from '@/components/ui/EmptyState.astro';
+import { NOT_DISCLOSED, presentIngredients, type productDecoder } from '@/lib/comparison';
+
+/**
+ * "What's inside": one row per active, with canonical ingredient, the name
+ * as printed, form, and compound vs elemental amounts in separate columns.
+ */
+interface Props {
+  decoder: ReturnType<typeof productDecoder>;
+}
+const rows = presentIngredients(Astro.props.decoder);
+const showSplit = rows.some((r) => r.compound !== NOT_DISCLOSED || r.elemental !== NOT_DISCLOSED);
+const muted = (v: string) => v === NOT_DISCLOSED;
+---
+
+{rows.length === 0 ? (
+  <EmptyState title="No actives transcribed yet">
+    Active ingredients will appear once a label panel with acceptable label evidence is captured.
+  </EmptyState>
+) : (
+  <div>
+    <div class="overflow-x-auto">
+      <table class="facts min-w-[36rem]">
+        <caption class="sr-only">Active ingredients per serving</caption>
+        <thead>
+          <tr>
+            <th scope="col">Ingredient</th>
+            <th scope="col">Form</th>
+            {showSplit ? (
+              <>
+                <th scope="col" class="n">
+                  Compound / serving
+                </th>
+                <th scope="col" class="n">
+                  Elemental / serving
+                </th>
+              </>
+            ) : (
+              <th scope="col" class="n">
+                Per serving
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr>
+              <th scope="row" class="py-2.5 pr-3 text-left font-normal">
+                {r.href ? (
+                  <a href={r.href} class="link font-semibold">
+                    {r.name}
+                  </a>
+                ) : (
+                  <span class="font-semibold">{r.name}</span>
+                )}
+                <span class="block text-xs text-ink-3">As printed: {r.asPrinted}</span>
+                {r.blend && (
+                  <span class="block text-xs text-ink-3">In proprietary blend: {r.blend}</span>
+                )}
+                {r.note && (
+                  <span class="mt-1 block border-l-[3px] border-marker pl-2 text-xs text-ink-2">
+                    <span class="caption mr-1 text-ink">labels.fyi note</span>
+                    {r.note}
+                  </span>
+                )}
+              </th>
+              <td class:list={[muted(r.form) && 'text-ink-3']}>{r.form}</td>
+              {showSplit ? (
+                <>
+                  <td class:list={['n font-mono', muted(r.compound) && 'text-ink-3']}>
+                    {r.compound}
+                  </td>
+                  <td
+                    class:list={[
+                      'n font-mono',
+                      muted(r.elemental) ? 'text-ink-3' : 'font-semibold',
+                    ]}
+                  >
+                    {r.elemental}
+                    {r.elementalBasis && (
+                      <span class="block font-sans text-xs font-normal text-ink-3">
+                        {r.elementalBasis}
+                      </span>
+                    )}
+                  </td>
+                </>
+              ) : (
+                <td class:list={['n font-mono', muted(r.declared) && 'text-ink-3']}>
+                  {r.declared}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {showSplit && (
+      <p class="mt-3 max-w-(--container-prose) text-xs text-ink-3">
+        <strong class="font-semibold text-ink-2">Compound</strong> is the weight of the declared
+        form. <strong class="font-semibold text-ink-2">Elemental</strong> is the amount of the
+        mineral itself, shown only when the label declares it. We never calculate one from the other
+        without a cited basis.
+      </p>
+    )}
+  </div>
+)}

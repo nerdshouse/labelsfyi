@@ -22,8 +22,12 @@ const forProduct = (
 export const templates = (prev: Template[]): Template[] => [
   ...prev,
   forProduct('labelPanel', 'Label panel for product', { status: 'current' }),
-  forProduct('claim', 'Claim for product', { workflowStatus: 'DRAFT', status: 'current' }),
-  forProduct('observation', 'Observation for product'),
+  forProduct('claim', 'Claim for product', {
+    workflowStatus: 'DRAFT',
+    status: 'current',
+    researchStatus: 'NEEDS_EVIDENCE',
+  }),
+  forProduct('observation', 'Observation for product', { verificationStatus: 'unverified' }),
   forProduct('priceSnapshot', 'Price snapshot for product', {
     currency: 'INR',
     availability: 'in_stock',

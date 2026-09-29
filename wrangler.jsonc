@@ -1,12 +1,84 @@
 {
-  // Cloudflare Workers static assets. The site is fully static; no Worker
-  // script is needed. See docs/deployment.md.
+  // labels.fyi Worker + static assets (docs/production.md).
+  // Every public page is prerendered (the public read model). The Worker only
+  // serves on-demand routes: /api/*, /analyse, /compare/<a>-vs-<b> and
+  // /internal/* (behind Cloudflare Access + app auth).
+  //
+  // Top level = local development (demo content, local R2 emulation).
+  // env.production = the live site. Select it at BUILD time with
+  // CLOUDFLARE_ENV=production (pnpm build:production does this): the adapter
+  // bakes the chosen environment into dist/server/wrangler.json, which
+  // `wrangler deploy` then uses. scripts/deploy-guard.ts verifies it.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "labels-fyi",
+  // Local development name. Only env.production is named "labelsfyi", and
+  // deploy-guard refuses any other name. NOTE: this does NOT protect against
+  // Cloudflare Workers Builds, which deploys into its own Worker regardless of
+  // this name. Keep Workers Builds disconnected (docs/production.md).
+  "name": "labelsfyi-local",
   "compatibility_date": "2026-09-01",
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "404-page",
-    "html_handling": "drop-trailing-slash",
+  // No not_found_handling: unmatched paths must reach the Worker (which
+  // serves /internal/* and the API, and the prerendered 404 page otherwise).
+  "assets": { "html_handling": "drop-trailing-slash" },
+  "workers_dev": false,
+  "preview_urls": false,
+  // Private bucket for submitted label photos (local emulation in dev).
+  "r2_buckets": [{ "binding": "SUBMISSIONS", "bucket_name": "labels-fyi-submissions" }],
+  "ratelimits": [
+    {
+      "name": "SUBMIT_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 5, "period": 60 },
+    },
+    {
+      "name": "ANALYSE_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
+
+  "env": {
+    "production": {
+      "name": "labelsfyi",
+      // Only the custom domain serves the site. workers.dev and preview URLs
+      // are off, so nothing can reach /internal without Cloudflare Access.
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [{ "pattern": "labels.fyi", "custom_domain": true }],
+      // Runtime (non-secret) configuration. SANITY_PROJECT_ID, ACCESS_* must
+      // be filled in before deploying (deploy-guard refuses empty values).
+      "vars": {
+        "DEPLOY_ENV": "production",
+        "CONTENT_SOURCE": "sanity",
+        "PUBLIC_SITE_URL": "https://labels.fyi",
+        "SANITY_PROJECT_ID": "r1eiikj7",
+        "SANITY_DATASET": "production",
+        "SANITY_API_VERSION": "2025-02-19",
+        // "true" only after confirming the dataset is private (the production
+        // build also proves it with an anonymous query).
+        "SUBMISSIONS_PRIVATE_DATASET": "true",
+        // Cloudflare Access application protecting /internal/*.
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "",
+      },
+      // Private: no public access, no r2.dev, no custom domain. Photos are only
+      // served through the authenticated /internal/review/image route.
+      "r2_buckets": [{ "binding": "SUBMISSIONS", "bucket_name": "labels-fyi-submissions" }],
+      "ratelimits": [
+        // Per-IP limit on POST /api/submissions.
+        {
+          "name": "SUBMIT_RATE_LIMITER",
+          "namespace_id": "1001",
+          "simple": { "limit": 5, "period": 60 },
+        },
+        // Per-IP limit on the URL analyser (each analysis makes outbound requests).
+        {
+          "name": "ANALYSE_RATE_LIMITER",
+          "namespace_id": "1002",
+          "simple": { "limit": 10, "period": 60 },
+        },
+      ],
+      // Secrets (never in this file): `wrangler secret put <NAME> --env production`
+      //   REVIEW_USER, REVIEW_PASSWORD, SANITY_WRITE_TOKEN
+    },
   },
 }

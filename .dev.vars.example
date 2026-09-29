@@ -1,0 +1,12 @@
+# Local secrets for `pnpm dev` (copy to .dev.vars; never commit .dev.vars).
+# Protects /internal/* with HTTP Basic auth. Use a long random password.
+REVIEW_USER=reviewer
+REVIEW_PASSWORD=change-me-to-a-long-random-string
+
+# Leave these unset locally: submissions are then stored in the local R2
+# emulation (.wrangler/state). In production all three are required, and the
+# dataset must be private (docs/submissions.md).
+# SANITY_PROJECT_ID=
+# SANITY_DATASET=
+# SANITY_WRITE_TOKEN=
+# SUBMISSIONS_PRIVATE_DATASET=true

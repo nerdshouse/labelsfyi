@@ -1,6 +1,13 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
-import { OBSERVATION_TYPE, PANEL_TYPE } from '../../lib/constants';
-import { lockedAfterWindow } from '../../lib/validation';
+import {
+  EXTRACTION_METHOD,
+  OBSERVATION_TYPE,
+  PANEL_SOURCE_KIND,
+  PANEL_TYPE,
+  SOURCE_KIND,
+  VERIFICATION_STATUS,
+} from '../../lib/constants';
+import { lockedAfterWindow, validatePanelImage } from '../../lib/validation';
 
 export const labelPanel = defineType({
   name: 'labelPanel',
@@ -27,12 +34,57 @@ export const labelPanel = defineType({
       description: 'As printed, e.g. "Nutrition information".',
     }),
     defineField({
+      name: 'sourceType',
+      title: 'Label evidence basis',
+      type: 'string',
+      options: { list: PANEL_SOURCE_KIND, layout: 'radio' },
+      description:
+        'Physical pack or brand-supplied label file is strongest. Artwork must reference a classified image confirmed to depict this exact product. Website copy is never label evidence.',
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'sourceImage',
+      title: 'Transcribed from image',
+      type: 'object',
+      fields: [
+        defineField({ name: 'snapshot', type: 'reference', to: [{ type: 'sourceSnapshot' }] }),
+        defineField({
+          name: 'submission',
+          title: 'Label submission',
+          type: 'reference',
+          to: [{ type: 'labelSubmission' }],
+          description: 'For panels transcribed from photos submitted via /submit.',
+        }),
+        defineField({
+          name: 'imageKey',
+          title: 'Image key on snapshot/submission',
+          type: 'string',
+        }),
+      ],
+      validation: (r) => r.custom(validatePanelImage),
+    }),
+    defineField({
       name: 'status',
       type: 'string',
       options: { list: ['current', 'superseded'], layout: 'radio' },
       initialValue: 'current',
       validation: (r) => r.required(),
     }),
+    defineField({
+      name: 'supersedes',
+      title: 'Supersedes panels',
+      type: 'array',
+      of: [defineArrayMember({ type: 'reference', to: [{ type: 'labelPanel' }] })],
+      description:
+        'Earlier panels this label replaces. The site treats them as superseded once this panel is approved (see docs/submissions.md), so old panels are never edited early.',
+    }),
+    defineField({
+      name: 'verifiedAt',
+      type: 'datetime',
+      description:
+        'When a person verified this transcription. Panels from label submissions render only after an approved review dated at or after this.',
+    }),
+    defineField({ name: 'serving', title: 'Serving (structured)', type: 'servingSpec' }),
     defineField({ name: 'servingSize', type: 'quantity' }),
     defineField({ name: 'servingSizeText', type: 'string' }),
     defineField({ name: 'servingsPerContainer', type: 'number' }),
@@ -168,6 +220,15 @@ export const observation = defineType({
     }),
     defineField({
       readOnly: lockedAfterWindow,
+      name: 'submission',
+      title: 'Label submission',
+      type: 'reference',
+      to: [{ type: 'labelSubmission' }],
+      description:
+        'The submitted photos this was read from. Internal provenance: submitter details are never rendered.',
+    }),
+    defineField({
+      readOnly: lockedAfterWindow,
       name: 'extractedFrom',
       title: 'Extracted from candidate',
       type: 'reference',
@@ -195,6 +256,36 @@ export const observation = defineType({
             ? 'When was this verified?'
             : true,
         ),
+    }),
+    defineField({
+      readOnly: lockedAfterWindow,
+      name: 'sourceType',
+      type: 'string',
+      options: { list: SOURCE_KIND },
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      readOnly: lockedAfterWindow,
+      name: 'sourceLocator',
+      type: 'string',
+      description:
+        'Short pointer, e.g. "gallery image 7 → supplement facts → magnesium". No page excerpts.',
+      validation: (r) => r.max(200),
+    }),
+    defineField({
+      readOnly: lockedAfterWindow,
+      name: 'extractionMethod',
+      type: 'string',
+      options: { list: EXTRACTION_METHOD },
+      initialValue: 'manual',
+    }),
+    defineField({
+      name: 'verificationStatus',
+      type: 'string',
+      options: { list: VERIFICATION_STATUS, layout: 'radio' },
+      initialValue: 'unverified',
+      description: 'Only verified observations are shown on the site.',
+      validation: (r) => r.required(),
     }),
     defineField({ name: 'notes', type: 'text', rows: 2 }),
     defineField({ name: 'supersededBy', type: 'reference', to: [{ type: 'observation' }] }),

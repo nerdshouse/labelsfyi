@@ -1,0 +1,82 @@
+---
+import InternalLayout from '@/layouts/InternalLayout.astro';
+import { serverEnv } from '@/lib/server/env';
+import { LIST_QUERY } from '@/lib/submissions/load';
+import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
+
+export const prerender = false;
+
+type Row = {
+  _id: string;
+  status: string;
+  submittedAt: string;
+  brand: string;
+  productName: string;
+  variant: string | null;
+  imageCount: number;
+  product: { name: string; workflowStatus: string } | null;
+};
+let rows: Row[] = [];
+let notConfigured: string | null = null;
+let storeKind = '';
+try {
+  const store = await getDocStore(await serverEnv());
+  storeKind = store.kind;
+  rows = await store.query<Row[]>(LIST_QUERY);
+} catch (e) {
+  if (e instanceof NotConfiguredError) notConfigured = e.message;
+  else throw e;
+}
+const date = (s: string) =>
+  new Date(s).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+---
+
+<InternalLayout title="Submissions">
+  <div class="flex items-baseline justify-between gap-4">
+    <h1 class="h2">Label submissions</h1>
+    {storeKind === 'local-r2' && <span class="tag tag-marker">Local development store</span>}
+  </div>
+  {notConfigured && <p class="notice mt-4">{notConfigured}</p>}
+  <table class="facts mt-6">
+    <thead>
+      <tr>
+        <th>Submitted (IST)</th>
+        <th>Product (as submitted)</th>
+        <th>Photos</th>
+        <th>Status</th>
+        <th>Linked product</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.length === 0 && (
+        <tr>
+          <td colspan="5" class="py-6 text-ink-3">
+            No submissions yet.
+          </td>
+        </tr>
+      )}
+      {rows.map((r) => (
+        <tr>
+          <td class="num whitespace-nowrap">{date(r.submittedAt)}</td>
+          <td>
+            <a href={`/internal/review/${r._id}`} class="link font-semibold">
+              {r.brand} · {r.productName}
+            </a>
+            {r.variant && <span class="block text-xs text-ink-3">{r.variant}</span>}
+          </td>
+          <td class="num">{r.imageCount}</td>
+          <td>
+            <span class="tag">{r.status}</span>
+          </td>
+          <td class="text-sm">
+            {r.product ? `${r.product.name} (${r.product.workflowStatus})` : '—'}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</InternalLayout>

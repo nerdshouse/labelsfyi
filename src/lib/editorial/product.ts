@@ -5,6 +5,7 @@ import type {
   ProductSummary,
   SourceData,
 } from '@/lib/content/types';
+import { ingredientAmounts } from '@/lib/comparison/ingredients';
 import { formatAmount } from '@/lib/formatting/quantity';
 import { formatMoney } from '@/lib/formatting/money';
 import { OBSERVATION_TYPE, PANEL_TYPE } from './meta';
@@ -25,9 +26,20 @@ export function keyPerServing(p: Pick<ProductSummary, 'keyActives' | 'keyNutrien
     .map((n) => `${formatAmount(n.perServing, n.unit)} ${inlineName(n.name)}`);
   const actives = p.keyActives.map((a) => {
     const name = a.ingredient?.name ?? a.displayName;
-    return a.amountPerServing !== null
-      ? `${formatAmount(a.amountPerServing, a.unit)} ${inlineName(name)}`
-      : `${name} (amount not disclosed)`;
+    const { compound, elemental, declared } = ingredientAmounts(a);
+    // Never present a compound weight as the ingredient itself: say which it is.
+    if (elemental) {
+      const from =
+        compound && a.form
+          ? ` (from ${formatAmount(compound.amount, compound.unit)} ${inlineName(a.form)})`
+          : '';
+      return `${formatAmount(elemental.amount, elemental.unit)} elemental ${inlineName(name)}${from}`;
+    }
+    if (compound && a.form)
+      return `${formatAmount(compound.amount, compound.unit)} ${inlineName(a.form)}`;
+    if (declared)
+      return `${formatAmount(declared.amount, declared.unit)} ${inlineName(a.form ?? name)}`;
+    return `${name} (amount not disclosed)`;
   });
   // A product with a protein figure doesn't need "whey (amount not disclosed)".
   return nutrients.length ? nutrients : actives;
@@ -56,6 +68,10 @@ export function productSources(p: ProductDetail): SourceData[] {
     p.panels.filter((x) => x.isCurrent).map((x) => x.source),
     ...p.claims.map((c) => [...c.evidence.map((e) => e.source), ...c.sources]),
     p.observations.map((o) => o.source),
+    ...p.discrepancies.map((d) => [
+      ...d.values.map((v) => v.source),
+      ...d.brandResponses.flatMap((r) => r.supportingSources),
+    ]),
     p.panels.filter((x) => !x.isCurrent).map((x) => x.source),
   );
 }

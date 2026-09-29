@@ -1,5 +1,15 @@
 # Editorial workflow
 
+> **Principles**
+>
+> 1. **Web content is discovery/input. Label evidence and verified observations are the basis for
+>    published product facts.**
+> 2. **More ingredients or a higher dose is not automatically a quality judgment.** labels.fyi exposes
+>    form, amount, transparency, evidence and cost so users can make their own comparisons. No scores,
+>    ranks or "best" lists.
+> 3. **Brand responses are preserved as provenance and clarification, not treated as automatic
+>    editorial approval.**
+
 ```
 DRAFT → FACT_CHECK → DIETITIAN_REVIEW → APPROVED → PUBLISHED
                                                       │
@@ -98,3 +108,42 @@ extracted fact against the source/label, and records verified facts as observati
 (with `extractedFrom`, `snapshot`, `verifiedBy`). The product then goes through Draft → Fact check →
 Dietitian review as usual. AI or parser output is never authoritative and can't mark anything
 verified. Full design: [ingestion.md](./ingestion.md).
+
+## Submitted labels
+
+Labels submitted at `/submit` are matched and transcribed on the internal review screen, not in
+Studio (see [submissions.md](./submissions.md)). A verified submission enters this workflow at
+**Fact check**. From then on the usual gates apply. In addition, panels and observations from a
+submission render only after an approved review dated **after** they were verified, so a label
+update to a live product stays hidden until you review the product again. After publishing, press
+**Mark as published** on the review screen to apply the held-back product-field changes.
+
+Products past Draft need label photos **or** a current panel transcribed from a confirmed submitted
+pack photo (those photos stay private).
+
+## Label facts vs claims
+
+- **Label fact:** "The package states 5 mg melatonin." Recorded as a label panel row or an observation,
+  with its evidence basis (pack, brand label file or confirmed artwork).
+- **Claim:** "The brand claims X." Recorded with its claim source (`claimSourceType` + locator), then
+  researched (`researchStatus`). Only then is an assessment written from evidence sources. Claims
+  never render with `NEEDS_EVIDENCE` or `IN_RESEARCH`.
+
+## Discrepancies
+
+1. When two sources disagree, create a discrepancy with **each source's value exactly as stated**.
+   Never overwrite one with the other. Published label facts follow the strongest label evidence.
+2. Choose severity by reader impact (`INFORMATIONAL` rounding, `MATERIAL` amount/serving/veg/
+   manufacturer, `HIGH_ATTENTION` safety-relevant). Don't use words like "misleading", "deceptive",
+   "fake" or "scam".
+3. Optionally contact the brand (`AWAITING_BRAND`) and record the response as a `brandResponse`.
+4. An editor decides the outcome (`RESOLVED` with a note, `UNRESOLVED` or `SUPERSEDED`). A brand
+   response is evidence for that decision, never the decision itself.
+5. Discrepancies and responses go through fact check and review before they are shown.
+
+## Images as evidence
+
+Before a panel is transcribed from an image, classify it (`imageKind`) and confirm what it depicts
+(`depictsExactProduct`) by reading the pack name, variant and size **in the image**. Filenames and
+gallery positions are not proof: the first real experiment found a sibling product's pack in a
+product's gallery.

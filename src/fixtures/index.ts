@@ -1,6 +1,8 @@
 import type { RawDoc } from './helpers.ts';
 import { comparisons, guides, reviews } from './editorial.ts';
 import { ingestion } from './ingestion.ts';
+import { magnesium } from './magnesium.ts';
+import { goalCommerce, goalProducts, goals, productGoals } from './goals.ts';
 import { ingredients } from './ingredients.ts';
 import { products } from './products.ts';
 import { brands, categories, merchants, reviewer, sources } from './reference.ts';
@@ -24,4 +26,9 @@ export const demoDataset: RawDoc[] = [
   ...comparisons,
   ...reviews,
   ...ingestion,
+  ...magnesium,
+  ...goals,
+  ...goalProducts,
+  ...goalCommerce,
+  ...productGoals,
 ];

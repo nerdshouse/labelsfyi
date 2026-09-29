@@ -1,5 +1,11 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
-import { ASSESSMENT_STATUS, CLAIM_TYPE, SOURCE_TYPE } from '../../lib/constants';
+import {
+  ASSESSMENT_STATUS,
+  CLAIM_TYPE,
+  RESEARCH_STATUS,
+  SOURCE_KIND,
+  SOURCE_TYPE,
+} from '../../lib/constants';
 import {
   editorialFields,
   editorialGroups,
@@ -76,6 +82,22 @@ export const claim = defineType({
       validation: (r) => r.required(),
     }),
     defineField({
+      name: 'claimSourceType',
+      title: 'Claim source',
+      type: 'string',
+      group: 'content',
+      options: { list: SOURCE_KIND },
+      description:
+        'CLAIM SOURCE: where the brand makes this claim. Evidence sources are listed separately below.',
+      validation: (r) => r.required(),
+    }),
+    defineField({
+      name: 'claimSourceLocator',
+      type: 'string',
+      group: 'content',
+      description: 'e.g. "Front of pack", "Product page → highlights".',
+    }),
+    defineField({
       name: 'claimType',
       type: 'string',
       group: 'content',
@@ -121,10 +143,30 @@ export const claim = defineType({
     }),
     defineField({
       name: 'sources',
+      title: 'Evidence sources',
       type: 'array',
       group: 'content',
       of: [defineArrayMember({ type: 'reference', to: [{ type: 'source' }] })],
       validation: requiredAfterDraft('Cite at least one source before fact check.'),
+    }),
+    defineField({
+      name: 'researchStatus',
+      title: 'Evidence research',
+      type: 'string',
+      group: 'content',
+      options: { list: RESEARCH_STATUS, layout: 'radio' },
+      initialValue: 'NEEDS_EVIDENCE',
+      description:
+        'A claim is not a label fact. It needs evidence research before any assessment is published.',
+      validation: (r) =>
+        r.required().custom((v, ctx) => {
+          const status = (ctx.document as { workflowStatus?: string })?.workflowStatus;
+          const late = ['APPROVED', 'PUBLISHED', 'NEEDS_REVIEW'].includes(status ?? '');
+          return late &&
+            !['EVIDENCE_IDENTIFIED', 'INSUFFICIENT_EVIDENCE_IDENTIFIED'].includes(String(v))
+            ? 'Complete evidence research before approval.'
+            : true;
+        }),
     }),
     defineField({ name: 'order', type: 'number', group: 'content' }),
     defineField({

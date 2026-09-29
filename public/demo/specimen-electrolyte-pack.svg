@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Fictional demo pack: Specimen Nutrition Electrolyte Drink Mix, Lemon">
+  <rect width="400" height="500" fill="#f5f2ea"/>
+  <rect x="70" y="40" width="260" height="420" rx="6" fill="#fff6c8" stroke="#1a1814" stroke-width="4"/>
+  <rect x="70" y="40" width="260" height="70" fill="#1a1814"/>
+  <text x="200" y="84" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#f5f2ea" text-anchor="middle">SPECIMEN NUTRITION</text>
+  <text x="200" y="190" font-family="Georgia, serif" font-size="38" fill="#1a1814" text-anchor="middle">Electrolyte</text>
+  <text x="200" y="232" font-family="Georgia, serif" font-size="38" fill="#1a1814" text-anchor="middle">Drink Mix</text>
+  <text x="200" y="290" font-family="Helvetica, Arial, sans-serif" font-size="22" fill="#1a1814" text-anchor="middle">LEMON · 20 SACHETS</text>
+  <rect x="110" y="340" width="180" height="70" fill="none" stroke="#1a1814" stroke-width="2"/>
+  <text x="200" y="370" font-family="monospace" font-size="15" fill="#1a1814" text-anchor="middle">DEMO PACK</text>
+  <text x="200" y="394" font-family="monospace" font-size="13" fill="#1a1814" text-anchor="middle">fictional product</text>
+</svg>
