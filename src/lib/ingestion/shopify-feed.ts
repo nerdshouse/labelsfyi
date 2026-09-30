@@ -1,4 +1,12 @@
 import { toCandidateDocument, type CandidateDocument } from './candidate';
+import {
+  isDefaultVariant,
+  listingAmounts,
+  listingBaseKey,
+  nonSupplementReason,
+  titlePackSize,
+  variantPackSize,
+} from './listing-parse';
 import type { ExtractedFactInput, ExtractedProduct } from './types';
 
 /**
@@ -155,9 +163,13 @@ export interface FeedExtraction {
   source: SourceConfig;
   fetchedAt: string;
   skipped: Array<{ handle: string; reason: string }>;
+  /** Retailer listings that look like the same product (never merged). */
+  duplicateSuspects: Array<{ handles: string[]; reason: string }>;
   products: Array<{
     snapshot: Record<string, unknown>;
     candidate: CandidateDocument & {
+      /** Neutral review note (e.g. a suspected duplicate listing); never a decision. */
+      notes?: string;
       goalSuggestions: Array<{
         _key: string;
         goalSlug: string;
@@ -167,6 +179,87 @@ export interface FeedExtraction {
       }>;
     };
   }>;
+}
+
+/** Brand's own store: variant, price and amount facts exactly as before. */
+function brandStoreFacts(p: ShopifyProduct, desc: string): ExtractedFactInput[] {
+  return [
+    ...p.variants.flatMap((v): ExtractedFactInput[] => {
+      const label = v.title === 'Default Title' ? null : v.title;
+      const withLabel = label ? { label } : {};
+      const sd = 'structured_data' as const;
+      return [
+        ...(label ? [{ field: 'pack_size' as const, value: label, method: sd }] : []),
+        { field: 'price' as const, ...withLabel, value: `₹${v.price}`, method: sd },
+        ...(v.compare_at_price
+          ? [{ field: 'mrp' as const, ...withLabel, value: `₹${v.compare_at_price}`, method: sd }]
+          : []),
+        ...(v.barcode
+          ? [{ field: 'gtin' as const, ...withLabel, value: v.barcode, method: sd }]
+          : []),
+      ];
+    }),
+    ...titleAmounts(p.title).map((a) => ({
+      field: 'ingredient_amount' as const,
+      label: a.label,
+      value: a.value,
+      method: 'parser' as const,
+      confidence: 0.5,
+    })),
+    ...descriptionAmounts(desc).map((a) => ({
+      field: 'ingredient_amount' as const,
+      label: a.label,
+      value: a.value,
+      method: 'parser' as const,
+      confidence: 0.6,
+    })),
+  ];
+}
+
+/**
+ * Retailer / marketplace listing (discovery data, all unverified):
+ *   - `variant` keeps every variant title (flavour, size) exactly as listed
+ *   - `pack_size` only when a real weight / count / servings is stated —
+ *     never a flavour name
+ *   - price / MRP / GTIN per variant, labelled with the variant title
+ *   - ingredient amounts via the conservative listing parser (listing-parse.ts)
+ *     — an `ingredient_amount` ONLY when the listing states the basis ("per
+ *     serving/scoop/tablet/100g…"); otherwise a generic `other` listing fact
+ *     marked "basis not stated". "Per serving" is never assumed.
+ */
+function retailerListingFacts(p: ShopifyProduct, desc: string): ExtractedFactInput[] {
+  const sd = 'structured_data' as const;
+  const perVariant = p.variants.flatMap((v): ExtractedFactInput[] => {
+    const label = isDefaultVariant(v.title) ? null : v.title.trim();
+    const withLabel = label ? { label } : {};
+    const pack = label ? variantPackSize(label) : null;
+    return [
+      ...(label ? [{ field: 'variant' as const, value: label, method: sd }] : []),
+      ...(pack && label ? [{ field: 'pack_size' as const, label, value: pack, method: sd }] : []),
+      { field: 'price' as const, ...withLabel, value: `₹${v.price}`, method: sd },
+      ...(v.compare_at_price
+        ? [{ field: 'mrp' as const, ...withLabel, value: `₹${v.compare_at_price}`, method: sd }]
+        : []),
+      ...(v.barcode
+        ? [{ field: 'gtin' as const, ...withLabel, value: v.barcode, method: sd }]
+        : []),
+    ];
+  });
+  // No size on any variant: use a size the title states ("250g (65 Servings)").
+  const titlePack = perVariant.some((f) => f.field === 'pack_size') ? null : titlePackSize(p.title);
+  return [
+    ...perVariant,
+    ...(titlePack
+      ? [{ field: 'pack_size' as const, value: titlePack, method: 'parser' as const }]
+      : []),
+    ...listingAmounts(p.title, desc).map((a) => ({
+      field: a.basis ? ('ingredient_amount' as const) : ('other' as const),
+      label: a.basis ? a.label : `${a.label} (listing statement; basis not stated)`,
+      value: a.value,
+      method: 'parser' as const,
+      confidence: a.where === 'description' ? 0.6 : 0.5,
+    })),
+  ];
 }
 
 export function extractShopifyFeed(
@@ -186,6 +279,12 @@ export function extractShopifyFeed(
       skipped.push({ handle: p.handle, reason: 'Sample, bundle or combo (not a single product)' });
       continue;
     }
+    // Retailers also sell food and accessories: those are not supplement candidates.
+    const notSupplement = isBrandStore ? null : nonSupplementReason(p.title, p.product_type);
+    if (notSupplement) {
+      skipped.push({ handle: p.handle, reason: notSupplement });
+      continue;
+    }
     const url = `${base}/products/${p.handle}`;
     const snapshotId = `snapshot.${source.id}.${p.handle}`;
     const desc = text(p.body_html);
@@ -198,35 +297,7 @@ export function extractShopifyFeed(
       ...(brand
         ? [{ field: 'brand' as const, value: brand, method: 'structured_data' as const }]
         : []),
-      ...p.variants.flatMap((v): ExtractedFactInput[] => {
-        const label = v.title === 'Default Title' ? null : v.title;
-        const withLabel = label ? { label } : {};
-        const sd = 'structured_data' as const;
-        return [
-          ...(label ? [{ field: 'pack_size' as const, value: label, method: sd }] : []),
-          { field: 'price' as const, ...withLabel, value: `₹${v.price}`, method: sd },
-          ...(v.compare_at_price
-            ? [{ field: 'mrp' as const, ...withLabel, value: `₹${v.compare_at_price}`, method: sd }]
-            : []),
-          ...(v.barcode
-            ? [{ field: 'gtin' as const, ...withLabel, value: v.barcode, method: sd }]
-            : []),
-        ];
-      }),
-      ...titleAmounts(p.title).map((a) => ({
-        field: 'ingredient_amount' as const,
-        label: a.label,
-        value: a.value,
-        method: 'parser' as const,
-        confidence: 0.5,
-      })),
-      ...descriptionAmounts(desc).map((a) => ({
-        field: 'ingredient_amount' as const,
-        label: a.label,
-        value: a.value,
-        method: 'parser' as const,
-        confidence: 0.6,
-      })),
+      ...(isBrandStore ? brandStoreFacts(p, desc) : retailerListingFacts(p, desc)),
     ];
     const extracted: ExtractedProduct = {
       provenance: {
@@ -299,5 +370,26 @@ export function extractShopifyFeed(
       candidate: { ...toCandidateDocument(extracted), goalSuggestions },
     });
   }
-  return { source, fetchedAt, skipped, products };
+  // Retailer listings that look like the same product: flagged for review,
+  // never merged or dropped (each listing stays its own candidate).
+  const duplicateSuspects: FeedExtraction['duplicateSuspects'] = [];
+  if (!isBrandStore) {
+    const groups = new Map<string, typeof products>();
+    for (const item of products) {
+      const brandFact = item.candidate.facts.find((f) => f.field === 'brand')?.value ?? null;
+      const key = listingBaseKey(brandFact, item.candidate.title);
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const handles = group.map((g) => g.candidate.sourceUrl.split('/products/')[1]!);
+      const reason = 'Same brand and product name as another listing on this store';
+      duplicateSuspects.push({ handles, reason });
+      for (const g of group)
+        g.candidate.notes = `Possible duplicate listing (${reason.toLowerCase()}: ${handles
+          .filter((h) => !g.candidate.sourceUrl.endsWith(`/products/${h}`))
+          .join(', ')}). Not merged; review before matching.`;
+    }
+  }
+  return { source, fetchedAt, skipped, duplicateSuspects, products };
 }

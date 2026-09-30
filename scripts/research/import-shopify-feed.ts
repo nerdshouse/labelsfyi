@@ -53,6 +53,12 @@ const docs = [
     termsReviewedAt: fetchedAt,
     termsSummary: source.termsExcerpt,
     accessPolicy: `${source.permissionBasis ?? ''} Robots: ${source.robots}`.trim(),
+    // Listings deliberately not turned into candidates, with the reason.
+    notes: out.skipped.length
+      ? `Skipped ${out.skipped.length} listing(s) on ${date}: ${out.skipped
+          .map((k) => `${k.handle} (${k.reason})`)
+          .join('; ')}`
+      : null,
   },
   ...out.products.flatMap((p) => [{ ...p.snapshot, contentHash: `sha256:${hash}` }, p.candidate]),
 ];
@@ -61,3 +67,5 @@ const path = `research/catalogue/${source.id}-${date}.ndjson`;
 writeFileSync(path, docs.map((d) => JSON.stringify(d)).join('\n') + '\n');
 console.log(`${out.products.length} candidates, ${out.skipped.length} skipped → ${path}`);
 for (const s of out.skipped) console.log(`  skipped ${s.handle}: ${s.reason}`);
+for (const d of out.duplicateSuspects)
+  console.log(`  possible duplicate (not merged): ${d.handles.join(' | ')}`);
