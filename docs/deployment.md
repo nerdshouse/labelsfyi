@@ -74,7 +74,9 @@ It runs `build:production`, then the production dist checks, then `deploy:guard`
 | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | worker          | yes (prod)       | Cloudflare Access JWT verification for `/internal`  |
 | `REVIEW_USER` / `REVIEW_PASSWORD`   | worker (secret) | for review       | Basic auth for `/internal/*`; fails closed if unset |
 | `SANITY_WRITE_TOKEN`                | worker (secret) | for submissions  | server-only; never in the build                     |
-| `SUBMISSIONS_PRIVATE_DATASET`       | worker          | for submissions  | must be `true`; hard prerequisite                   |
+| `SUBMISSIONS_PRIVATE_DATASET`       | worker          | for review       | must be `true`; hard prerequisite                   |
+| `PUBLIC_SUBMISSIONS`                | worker          | yes (prod)       | `open` / `closed`; anything else = closed           |
+| `SANITY_STUDIO_URL`                 | worker          | no               | "Open in Studio" links (default localhost:3333)     |
 | `SANITY_STUDIO_DATASET`             | studio          | no               |                                                     |
 
 Variables are validated by Astro's `env.schema` (`astro.config.mjs`). Never commit `.env`.

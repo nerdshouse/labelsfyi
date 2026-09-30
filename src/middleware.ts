@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import {
   checkInternalAccess,
+  internalActor,
   isInternalRequest,
   PRIVATE_HEADERS,
 } from '@/lib/server/internal-auth';
@@ -26,16 +27,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
       status: 503,
       headers: PRIVATE_HEADERS,
     });
+  let accessEmail: string | null = null;
   if (accessConfigured) {
     const access = await verifyAccessJwt(context.request.headers.get('cf-access-jwt-assertion'), {
       teamDomain: env.ACCESS_TEAM_DOMAIN!,
       aud: env.ACCESS_AUD!,
     });
     if (!access.ok) return new Response('Forbidden.', { status: 403, headers: PRIVATE_HEADERS });
+    accessEmail = access.email;
   }
 
   const denied = checkInternalAccess(context.request, context.url, env);
   if (denied) return denied;
+  const actor = internalActor(context.request, accessEmail);
+  if (actor) context.locals.internalActor = actor;
   const res = await next();
   // Rebuild: redirects (Response.redirect) have immutable headers.
   const headers = new Headers(res.headers);

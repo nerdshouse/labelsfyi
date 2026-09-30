@@ -1,6 +1,7 @@
 import { defineArrayMember, defineField, defineType } from 'sanity';
 import {
   ACCESS_MODE,
+  CANDIDATE_REJECTION_REASON,
   CANDIDATE_STATUS,
   PRODUCT_GOAL_BASIS,
   DEPICTS,
@@ -602,6 +603,13 @@ export const ingestionCandidate = defineType({
       type: 'array',
       of: [defineArrayMember({ type: 'string' })],
       description: 'Values the reviewer could not read. Each one blocks editorial review.',
+    }),
+    defineField({
+      name: 'rejectionReason',
+      type: 'string',
+      options: { list: CANDIDATE_REJECTION_REASON },
+      hidden: ({ document }) => document?.status !== 'rejected',
+      description: 'Set with status "rejected" (internal candidate review).',
     }),
     defineField({ name: 'reviewedBy', type: 'string' }),
     defineField({ name: 'reviewedAt', type: 'datetime' }),

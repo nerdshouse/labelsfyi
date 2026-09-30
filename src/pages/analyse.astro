@@ -46,11 +46,12 @@ if (Astro.request.method === 'POST') {
       context = catalogueContext(result.extraction, await loadCatalogueIndex(Astro.url));
     if (action === 'submit' && (state === 'EXTRACTION_SUCCESS' || state === 'EXTRACTION_PARTIAL')) {
       try {
-        const [{ getDocStore }, { IDENTITY_QUERY, identityRecords }] = await Promise.all([
-          import('@/lib/submissions/store-factory'),
-          import('@/lib/submissions/review'),
-        ]);
-        const store = await getDocStore(env);
+        const [{ getPublicSubmissionStore }, { IDENTITY_QUERY, identityRecords }] =
+          await Promise.all([
+            import('@/lib/submissions/store-factory'),
+            import('@/lib/submissions/review'),
+          ]);
+        const store = await getPublicSubmissionStore(env);
         const policy = SOURCES.find((s) => s.id === result!.policy!.id)!;
         const stamp = `${Date.now().toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0]!.toString(36)}`;
         const docs = candidateDocuments(

@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { serverEnv } from '@/lib/server/env';
 import { receiveSubmission } from '@/lib/submissions/intake';
-import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
+import { getPublicSubmissionStore, NotConfiguredError } from '@/lib/submissions/store-factory';
 import { LIMITS } from '@/lib/submissions/validate';
 
 export const prerender = false;
@@ -36,7 +36,7 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
   }
   try {
     if (!env.SUBMISSIONS) throw new NotConfiguredError('No image storage bound.');
-    const store = await getDocStore(env);
+    const store = await getPublicSubmissionStore(env);
     const result = await receiveSubmission(await request.formData(), {
       store,
       objects: env.SUBMISSIONS,
