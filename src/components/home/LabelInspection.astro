@@ -1,0 +1,371 @@
+---
+import VegMark from '@/components/ui/VegMark.astro';
+
+/**
+ * Homepage hero visual when there is no published product to show:
+ * an EXAMPLE label being read, row by row. A thin rule sweeps across each row
+ * of a printed Supplement Facts fragment, the value gets a highlighter swipe
+ * as the rule reaches it, and an evidence slip for that value slides to the
+ * front of the stack.
+ *
+ * It is an illustration, so it says so ("Example") and the values are hidden
+ * from assistive tech (the caption describes it). Once real products exist,
+ * the homepage shows DecodedLabel (a real, checked panel) instead.
+ *
+ * Motion: one 16 s loop of four 4 s phases (one per row), transform and
+ * opacity only, no script-driven animation. Negative delays start it
+ * mid-cycle, so the first frame is already composed. The base styles ARE the
+ * static pose (creatine row highlighted, its slip in front), used when
+ * animations are off (prefers-reduced-motion) or paused off-screen.
+ */
+const rows = [
+  { name: 'Serving size', value: '1 scoop' },
+  { name: 'Creatine Monohydrate', value: '3 g' },
+  { name: 'Magnesium (elemental)', value: '220 mg' },
+  { name: 'Vitamin D3', value: '2000 IU' },
+];
+const slips = [
+  { n: '01', kind: 'Serving', name: 'Serving size', value: '1 scoop', basis: 'as printed' },
+  { n: '02', kind: 'Active', name: 'Creatine Monohydrate', value: '3 g', basis: 'per serving' },
+  { n: '03', kind: 'Mineral', name: 'Magnesium', value: '220 mg elemental', basis: 'per serving' },
+  { n: '04', kind: 'Vitamin', name: 'Vitamin D3', value: '2000 IU', basis: 'per serving' },
+];
+---
+
+<figure
+  class="inspect relative mx-auto w-full max-w-[30rem] lg:mx-0 lg:max-w-none"
+  aria-labelledby="inspect-caption"
+  data-label-inspection
+>
+  <div class="inspect-stage" aria-hidden="true">
+    <!-- The label being read -->
+    <div class="inspect-panel border-2 border-ink bg-sheet p-3 shadow-[6px_6px_0_var(--color-ink)]">
+      <div class="flex items-end justify-between border-b-[6px] border-ink pb-1">
+        <p class="text-lg leading-none font-extrabold tracking-tight">Supplement Facts</p>
+        <VegMark status="VEGETARIAN" size={14} withLabel class="font-mono text-2xs text-ink-2" />
+      </div>
+      <div class="inspect-rows relative">
+        {rows.map((r, i) => (
+          <div
+            class:list={[
+              'inspect-row num flex items-center justify-between border-b border-ink text-sm',
+              `row-${i}`,
+              i === 0 && 'border-b-[3px]',
+            ]}
+          >
+            <span class:list={[i > 0 && 'font-semibold']}>{r.name}</span>
+            <span class="relative font-mono">
+              <span class="inspect-hl" />
+              <span class="relative">{r.value}</span>
+            </span>
+          </div>
+        ))}
+        <div class="inspect-scan">
+          <span class="inspect-scan-rule"></span>
+        </div>
+      </div>
+      <p class="num mt-2 flex justify-between gap-3 font-mono text-2xs text-ink-2">
+        <span class="whitespace-nowrap">MRP ₹1,299 incl. of all taxes</span>
+        <span class="whitespace-nowrap">Mfd. 08/2026</span>
+      </p>
+    </div>
+
+    <!-- Evidence slips: the value just read comes to the front -->
+    <div class="inspect-slips">
+      {slips.map((s, i) => (
+        <div class:list={['inspect-slip border border-ink bg-sheet px-3 py-2', `slip-${i}`]}>
+          <p class="flex justify-between font-mono text-2xs tracking-wide text-ink-3 uppercase">
+            <span>
+              {s.n} · {s.kind}
+            </span>
+            <span>{s.basis}</span>
+          </p>
+          <p class="mt-1 border-t border-line pt-1 text-sm leading-snug">
+            <span class="font-semibold">{s.name}</span> —{' '}
+            <span class="marker num font-mono">{s.value}</span>
+          </p>
+          <p class="mt-1 font-mono text-2xs text-ink-2">
+            <span class="mr-1 inline-block size-1.5 rounded-full bg-ink align-middle" />
+            source: physical label
+          </p>
+        </div>
+      ))}
+    </div>
+
+    <p class="inspect-stamp flex items-center gap-2 font-mono text-2xs text-ink-2">
+      <span class="tag tag-ink">Label verified</span>
+      <span>Observed — Sep 2026</span>
+    </p>
+  </div>
+  <figcaption id="inspect-caption" class="caption mt-4 text-ink-3">
+    Example · how a label is read, value by value
+  </figcaption>
+</figure>
+
+<script>
+  // Pause the loop while the hero is off-screen (no work when not visible).
+  const fig = document.querySelector<HTMLElement>('[data-label-inspection]');
+  if (fig && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([e]) => {
+      fig.toggleAttribute('data-paused', !e?.isIntersecting);
+    }).observe(fig);
+  }
+</script>
+
+<style>
+  /* Fixed geometry: rows, rule and slips are sized up front (no layout shift). */
+  .inspect {
+    --row: 2.25rem;
+    --cycle: 16s;
+  }
+  .inspect-stage {
+    position: relative;
+    /* Panel + room for the slip stack that overlaps its lower right. */
+    padding-bottom: 8.5rem;
+  }
+  .inspect-panel {
+    width: 78%;
+    /* Clips the reader after its sweep (it rests one row-width to the right). */
+    overflow: clip;
+  }
+  .inspect-row {
+    height: var(--row);
+  }
+
+  /* Highlighter swipe behind a value (transform only). */
+  .inspect-hl {
+    position: absolute;
+    inset: 0.15rem -0.3rem;
+    background: var(--color-marker);
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  .row-1 .inspect-hl {
+    transform: scaleX(1); /* static pose: creatine highlighted */
+  }
+
+  /* Reader: a thin vertical rule sweeping across the row being read. The
+     wrapper spans the rows, so translateX(100%) is one full sweep. Hidden in
+     the static pose. */
+  .inspect-scan {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--row);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .inspect-scan-rule {
+    position: absolute;
+    left: 0;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    width: 1px;
+    background: var(--color-ink);
+  }
+
+  /* Slip stack (bottom right, overlapping the panel). */
+  .inspect-slips {
+    position: absolute;
+    right: 0;
+    bottom: 2.25rem;
+    width: 62%;
+    height: 6.25rem;
+  }
+  .inspect-slip {
+    position: absolute;
+    inset: auto 0 0 0;
+    transform-origin: 50% 0;
+    opacity: 0;
+    box-shadow: 3px 3px 0 var(--color-ink);
+  }
+  /* Static pose: creatine in front, serving size behind, D3 further back. */
+  .slip-1 {
+    opacity: 1;
+    z-index: 3;
+  }
+  .slip-0 {
+    opacity: 0.55;
+    z-index: 2;
+    transform: translateY(-0.7rem) scale(0.96);
+  }
+  .slip-3 {
+    opacity: 0.25;
+    z-index: 1;
+    transform: translateY(-1.35rem) scale(0.92);
+  }
+
+  .inspect-stamp {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* ── Motion (none at all under prefers-reduced-motion) ──────────────── */
+  @media (prefers-reduced-motion: no-preference) {
+    .inspect-scan,
+    .inspect-hl,
+    .inspect-slip {
+      animation-duration: var(--cycle);
+      animation-iteration-count: infinite;
+      animation-fill-mode: both;
+      animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+    }
+    .inspect-scan {
+      animation-name: inspect-scan;
+      animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1);
+      animation-delay: -5s;
+    }
+    .inspect-hl {
+      animation-name: inspect-hl;
+    }
+    .inspect-slip {
+      animation-name: inspect-slip;
+    }
+    /* Phase i runs 4 s after phase i-1; the offsets start the loop at phase 1. */
+    .row-0 .inspect-hl,
+    .slip-0 {
+      animation-delay: -5s;
+    }
+    .row-1 .inspect-hl,
+    .slip-1 {
+      animation-delay: -1s;
+    }
+    .row-2 .inspect-hl,
+    .slip-2 {
+      animation-delay: -13s;
+    }
+    .row-3 .inspect-hl,
+    .slip-3 {
+      animation-delay: -9s;
+    }
+    [data-paused] * {
+      animation-play-state: paused;
+    }
+  }
+
+  /* One sweep per phase (25% = 4 s): fade in at the row start, sweep for
+     ~1.1 s, fade out at the end, then wait for the next row. */
+  @keyframes inspect-scan {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    1% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    8% {
+      opacity: 1;
+      transform: translate(100%, 0);
+    }
+    10%,
+    24.9% {
+      opacity: 0;
+      transform: translate(100%, 0);
+    }
+    25% {
+      opacity: 0;
+      transform: translate(0, var(--row));
+    }
+    26% {
+      opacity: 1;
+      transform: translate(0, var(--row));
+    }
+    33% {
+      opacity: 1;
+      transform: translate(100%, var(--row));
+    }
+    35%,
+    49.9% {
+      opacity: 0;
+      transform: translate(100%, var(--row));
+    }
+    50% {
+      opacity: 0;
+      transform: translate(0, calc(var(--row) * 2));
+    }
+    51% {
+      opacity: 1;
+      transform: translate(0, calc(var(--row) * 2));
+    }
+    58% {
+      opacity: 1;
+      transform: translate(100%, calc(var(--row) * 2));
+    }
+    60%,
+    74.9% {
+      opacity: 0;
+      transform: translate(100%, calc(var(--row) * 2));
+    }
+    75% {
+      opacity: 0;
+      transform: translate(0, calc(var(--row) * 3));
+    }
+    76% {
+      opacity: 1;
+      transform: translate(0, calc(var(--row) * 3));
+    }
+    83% {
+      opacity: 1;
+      transform: translate(100%, calc(var(--row) * 3));
+    }
+    85%,
+    100% {
+      opacity: 0;
+      transform: translate(100%, calc(var(--row) * 3));
+    }
+  }
+
+  /* The value is marked as the rule reaches it, held, then fades. */
+  @keyframes inspect-hl {
+    0%,
+    5% {
+      opacity: 1;
+      transform: scaleX(0);
+    }
+    9%,
+    22% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    27%,
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  /* Enters once its value is marked; then front → behind → further back → gone. */
+  @keyframes inspect-slip {
+    0%,
+    8% {
+      opacity: 0;
+      z-index: 3;
+      transform: translateY(0.9rem);
+    }
+    15%,
+    25% {
+      opacity: 1;
+      z-index: 3;
+      transform: translateY(0);
+    }
+    31%,
+    50% {
+      opacity: 0.55;
+      z-index: 2;
+      transform: translateY(-0.7rem) scale(0.96);
+    }
+    56%,
+    75% {
+      opacity: 0.25;
+      z-index: 1;
+      transform: translateY(-1.35rem) scale(0.92);
+    }
+    81%,
+    100% {
+      opacity: 0;
+      z-index: 0;
+      transform: translateY(-1.8rem) scale(0.9);
+    }
+  }
+</style>

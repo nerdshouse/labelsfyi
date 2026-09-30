@@ -1,5 +1,6 @@
 ---
 import DecodedLabel from '@/components/home/DecodedLabel.astro';
+import LabelInspection from '@/components/home/LabelInspection.astro';
 import ProductRow from '@/components/product/ProductRow.astro';
 import SearchBox from '@/components/search/SearchBox.astro';
 import AssessmentGlyph from '@/components/ui/AssessmentGlyph.astro';
@@ -99,7 +100,16 @@ const goalTiles = graph.goals.map((g) => ({
         </form>
       </div>
     </div>
-    <div class="lg:pt-6">{hero && <DecodedLabel product={hero} />}</div>
+    {hero ? (
+      <div class="lg:pt-6">
+        <DecodedLabel product={hero} />
+      </div>
+    ) : (
+      // No published product yet: an example of how a label is read.
+      <div class="hidden md:block lg:pt-36 xl:pt-40">
+        <LabelInspection />
+      </div>
+    )}
   </section>
 
   <!-- How it works -->
