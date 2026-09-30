@@ -13,6 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   extractShopifyFeed,
   assertCollectionPermitted,
+  dataSourceTypeFor,
   type SourceConfig,
 } from '@/lib/ingestion/shopify-feed';
 
@@ -45,12 +46,19 @@ const docs = [
     _type: 'dataSource',
     name: source.name,
     domain: source.domain,
-    sourceType: 'brand',
+    // From the registered sourceKind: a retailer/marketplace is never "brand".
+    sourceType: dataSourceTypeFor(source),
     active: false,
     accessMode: source.accessMode,
     termsReviewedAt: fetchedAt,
     termsSummary: source.termsExcerpt,
     accessPolicy: `${source.permissionBasis ?? ''} Robots: ${source.robots}`.trim(),
+    // Listings deliberately not turned into candidates, with the reason.
+    notes: out.skipped.length
+      ? `Skipped ${out.skipped.length} listing(s) on ${date}: ${out.skipped
+          .map((k) => `${k.handle} (${k.reason})`)
+          .join('; ')}`
+      : null,
   },
   ...out.products.flatMap((p) => [{ ...p.snapshot, contentHash: `sha256:${hash}` }, p.candidate]),
 ];
@@ -59,3 +67,5 @@ const path = `research/catalogue/${source.id}-${date}.ndjson`;
 writeFileSync(path, docs.map((d) => JSON.stringify(d)).join('\n') + '\n');
 console.log(`${out.products.length} candidates, ${out.skipped.length} skipped → ${path}`);
 for (const s of out.skipped) console.log(`  skipped ${s.handle}: ${s.reason}`);
+for (const d of out.duplicateSuspects)
+  console.log(`  possible duplicate (not merged): ${d.handles.join(' | ')}`);

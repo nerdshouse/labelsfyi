@@ -674,7 +674,8 @@ export interface GoalIngredientData {
   evidence: string | null;
 }
 
-export type ProductGoalBasis = 'BRAND_MARKETING' | 'EDITORIAL_CLASSIFICATION' | 'INGREDIENT_MATCH';
+export type ProductGoalBasis =
+  'BRAND_MARKETING' | 'RETAILER_LISTING' | 'EDITORIAL_CLASSIFICATION' | 'INGREDIENT_MATCH';
 
 export interface ProductGoalData {
   _id: string;

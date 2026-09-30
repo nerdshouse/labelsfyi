@@ -7,11 +7,11 @@ Flow: **goal → common ingredients → products → decoder → compare → rec
 
 ## Data model
 
-| Type                      | What                                                                                                                               | Rules                                                                                                                                                                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `goal`                    | `name`, `slug` (top-level URL), `shortDescription`, `discoveryDescription`, `ingredients[]`, `order` + editorial workflow          | Published only via the normal workflow **and** an approved `editorialReview` (like ingredients and guides). The Studio blocks slugs that collide with existing routes and copy containing treat/cure/prevent/diagnose/heal. |
-| `goalIngredient` (object) | `name`, optional canonical `ingredient`, `matchNames[]`, `relation`                                                                | `COMMONLY_FOUND` by default. `EDITORIALLY_REVIEWED` needs a linked evidence record (`claim`), and the site only honours it while that claim is live and publishable; otherwise it is shown as commonly found.               |
-| `productGoal`             | `product`, `goal`, `basis`, `statement`, `source`/`sourceUrl`, `sourceLocator`, `observedAt`, `status`, `reviewedBy`, `reviewedAt` | Only `APPROVED` + named reviewer + a source is shown. Bases: `BRAND_MARKETING`, `EDITORIAL_CLASSIFICATION`, `INGREDIENT_MATCH` (a suggestion only; it still needs approval).                                                |
+| Type                      | What                                                                                                                               | Rules                                                                                                                                                                                                                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goal`                    | `name`, `slug` (top-level URL), `shortDescription`, `discoveryDescription`, `ingredients[]`, `order` + editorial workflow          | Published only via the normal workflow **and** an approved `editorialReview` (like ingredients and guides). The Studio blocks slugs that collide with existing routes and copy containing treat/cure/prevent/diagnose/heal.                                    |
+| `goalIngredient` (object) | `name`, optional canonical `ingredient`, `matchNames[]`, `relation`                                                                | `COMMONLY_FOUND` by default. `EDITORIALLY_REVIEWED` needs a linked evidence record (`claim`), and the site only honours it while that claim is live and publishable; otherwise it is shown as commonly found.                                                  |
+| `productGoal`             | `product`, `goal`, `basis`, `statement`, `source`/`sourceUrl`, `sourceLocator`, `observedAt`, `status`, `reviewedBy`, `reviewedAt` | Only `APPROVED` + named reviewer + a source is shown. Bases: `BRAND_MARKETING`, `RETAILER_LISTING` (a retailer's categorisation, never presented as the brand's), `EDITORIAL_CLASSIFICATION`, `INGREDIENT_MATCH` (a suggestion only; it still needs approval). |
 
 Initial goals: sleep, stress, immunity, hydration, energy, gut-health, joint-health, hair-skin,
 heart-health. **Not created**, and not to be created without an editorial and evidence framework:
@@ -31,7 +31,8 @@ PCOS, anxiety, depression, ADHD, diabetes, hormonal balance and similar conditio
 ## How products are assigned
 
 - Research imports and editors create `productGoal` **candidates** (for example from the brand's own
-  product type, tags or title: basis `BRAND_MARKETING`, with the verbatim statement and locator).
+  product type, tags or title: basis `BRAND_MARKETING` on a brand's own store, `RETAILER_LISTING`
+  on a retailer or marketplace, with the verbatim statement and locator).
 - Reviewers decide at **/internal/goals**: Approve, Reject (with a reason) or Change goal (which
   re-assigns and records `EDITORIAL_CLASSIFICATION`). Every decision records the reviewer's name
   and the time.

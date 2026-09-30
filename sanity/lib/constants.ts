@@ -314,6 +314,7 @@ export const GOAL_INGREDIENT_RELATION = [
 ];
 export const PRODUCT_GOAL_BASIS = [
   opt('BRAND_MARKETING', 'Brand marketing (the brand markets it for this goal)'),
+  opt('RETAILER_LISTING', 'Retailer listing (a retailer lists it under this goal; not the brand)'),
   opt('EDITORIAL_CLASSIFICATION', 'Editorial classification'),
   opt('INGREDIENT_MATCH', 'Ingredient match (suggestion only; needs editorial approval)'),
 ];

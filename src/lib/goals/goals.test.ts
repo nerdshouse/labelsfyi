@@ -590,6 +590,7 @@ describe('research feed adapter', () => {
     name: 'Demo brand',
     domain: 'brand.example',
     accessMode: 'BRAND_PERMISSION',
+    sourceKind: 'BRAND_WEBSITE',
     permissionVerified: true,
     permissionRecord: 'assetPermission.demo',
   };

@@ -1,5 +1,5 @@
 {
-  "reviewedAt": "2026-09-29",
+  "reviewedAt": "2026-09-30",
   "note": "Access decisions for the Sprint 6 research catalogue. Excerpts are short quotes of the live terms on the review date. Re-check before any future collection. hosts/productPath are used at runtime by the URL analyser (src/lib/sources/policy.ts): unknown hosts and non-product paths are refused.",
   "sources": [
     {
@@ -64,6 +64,22 @@
       "hosts": ["rasayan.in", "www.rasayan.in"],
       "sourceKind": "OTHER",
       "permissionVerified": false
+    },
+    {
+      "id": "fitlix",
+      "name": "FITLIX (retailer)",
+      "domain": "fitlix.co.in",
+      "accessMode": "AUTHORIZED_FEED",
+      "permissionBasis": "FITLIX is a multi-brand supplement retailer, not a manufacturer. On 2026-09-30 the labels.fyi operator confirmed authorization to fetch the FITLIX catalogue (public /products.json). The written authorization is held by the operator; by decision it is not recorded as a Sanity document, so permissionRecord is an operator-attestation reference, not an assetPermission _id. Scope used: FITLIX's own listing data and product URLs. Brand imagery, label artwork and product copy are not collected: a retailer cannot authorise them.",
+      "robots": "Captured 2026-09-30 (Shopify default): User-agent * allows /products/<handle>, /products.json and /collections/; disallows cart, checkout, orders, account, admin, sorted/filtered collections and /recommendations/products. No crawl-delay. Sitemap: https://fitlix.co.in/sitemap.xml (106 product URLs).",
+      "termsExcerpt": "Collection on the basis of the operator-confirmed FITLIX authorization (2026-09-30), limited to FITLIX's own listing data: product facts it lists and its product URLs. Brand imagery, label artwork and product copy are out of scope.",
+      "collected": "2026-09-30: one request to /products.json → 106 products, 105 UNVERIFIED ingestion candidates, 1 skipped (combo pack), written to research/catalogue/fitlix-2026-09-30.ndjson (gitignored, not imported into Sanity). No images downloaded; no image references or description text kept.",
+      "notes": "Retailer listing: the seller is FITLIX; each product's brand is Shopify's vendor exactly as reported (e.g. MuscleBlaze, BigMuscles Nutrition, Beastlife), never FITLIX. www.fitlix.co.in is not served (TLS handshake failure / HTTP 409 on 2026-09-30).",
+      "hosts": ["fitlix.co.in", "www.fitlix.co.in"],
+      "sourceKind": "MARKETPLACE",
+      "productPath": "^/products/[a-z0-9](?:[a-z0-9-]|%[89a-fA-F][0-9a-fA-F]){0,254}/?$",
+      "permissionVerified": true,
+      "permissionRecord": "operator-attested:2026-09-30"
     }
   ]
 }
