@@ -1,5 +1,6 @@
 import type { ExtractedFactInput } from '@/lib/ingestion/types';
 import { normalizeGtin } from '@/lib/identity/gtin';
+import { listingAmounts } from '@/lib/ingestion/listing-parse';
 import { descriptionAmounts, titleAmounts } from '@/lib/ingestion/shopify-feed';
 
 /**
@@ -47,6 +48,12 @@ export interface ExtractedIngredient {
   value: string;
   /** True only when the page literally labels the figure "elemental". */
   elementalStated: boolean;
+  /**
+   * The basis exactly as the page states it ("serving", "scoop", "100 g"…):
+   * from the facts table's own column header or a "… per X" statement. Null
+   * when the page does not state one; never assumed to be "per serving".
+   */
+  basis: string | null;
   where: 'Page title' | 'Product name' | 'Facts table on page' | 'Page text';
 }
 
@@ -133,34 +140,97 @@ export function visibleText(html: string): string {
     .slice(0, MAX_TEXT);
 }
 
-const AMOUNT_CELL = /^(\d+(?:[.,]\d+)?)\s?(mg|mcg|µg|g|iu|IU|ml)$/;
+/** A link to a product page other than the one analysed (same site). */
+function isOtherProduct(href: string, page: URL | null): boolean {
+  try {
+    const u = page ? new URL(href.trim(), page) : new URL(href.trim());
+    if (page && u.hostname.replace(/^www\./, '') !== page.hostname.replace(/^www\./, ''))
+      return false;
+    const p = u.pathname.replace(/\/+$/, '');
+    return /\/products\/[^/]+$/.test(p) && (!page || p !== page.pathname.replace(/\/+$/, ''));
+  } catch {
+    return false;
+  }
+}
 
-/** Supplement-facts style table rows: a name cell + an amount cell. */
+/**
+ * Only content about THIS product: drops site chrome (header, footer, nav,
+ * aside, dialogs) and links to any other product page together with their
+ * text (related-product cards, menus), so another product's title or amounts
+ * are never read as this page's. Structured data and meta tags are read
+ * separately and are unaffected.
+ */
+export function thisProductOnly(html: string, pageUrl: URL | null): string {
+  return html
+    .replace(/<(header|footer|nav|aside|dialog)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(
+      /<a\b[^>]*\bhref\s*=\s*["']([^"']{1,2000})["'][^>]*>[\s\S]*?<\/a>/gi,
+      (a, href: string) => (isOtherProduct(href, pageUrl) ? ' ' : a),
+    );
+}
+
+const AMOUNT_CELL = /^(\d+(?:[.,]\d+)?)\s?(mg|mcg|µg|g|iu|IU|ml|kcal|kJ)$/;
+
+const BASIS =
+  /\bper\s+(serving|scoop|capsule|tablet|softgel|sachet|gummy|strip|chew|100\s?(?:g|gm|ml)|\d+\s?(?:g|ml))\b/i;
+const basisOf = (s: string) => BASIS.exec(s)?.[1]?.toLowerCase().replace(/\s+/g, ' ') ?? null;
+
+/**
+ * Supplement-facts style table rows: a name cell + an amount cell. The basis
+ * comes from that table's header (e.g. "Amount per serving", or the column
+ * headed "Per 100 g"); rows of a table with no stated basis get none.
+ */
 export function tableRows(html: string): ExtractedIngredient[] {
   const rows: ExtractedIngredient[] = [];
-  for (const tr of html.slice(0, MAX_TEXT * 5).matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
-    const cells = [...tr[1]!.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(
-      (c) => clean(c[1], 120) ?? '',
-    );
-    const amountIdx = cells.findIndex((c) => AMOUNT_CELL.test(c));
-    const nameIdx = cells.findIndex(
-      (c, i) => i !== amountIdx && /[a-z]/i.test(c) && !AMOUNT_CELL.test(c),
-    );
-    if (amountIdx === -1 || nameIdx === -1) continue;
-    const name = cells[nameIdx]!;
-    if (/serving|per\s+100|amount per|%\s*dv|daily value/i.test(name)) continue;
-    rows.push({
-      label: name,
-      value: cells[amountIdx]!.replace(/iu$/i, 'IU'),
-      elementalStated: /\belemental\b/i.test(name),
-      where: 'Facts table on page',
-    });
-    if (rows.length >= 40) break;
+  const source = html.slice(0, MAX_TEXT * 5);
+  const tables = [...source.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map((t) => t[1]!);
+  // Rows outside a <table> (malformed markup) are read without a basis.
+  for (const table of tables.length ? tables : [source]) {
+    let columnBasis: Array<string | null> = [];
+    let tableBasis: string | null = null;
+    for (const tr of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...tr[1]!.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(
+        (c) => clean(c[1], 120) ?? '',
+      );
+      const amountIdx = cells.findIndex((c) => AMOUNT_CELL.test(c));
+      if (amountIdx === -1) {
+        const bases = cells.map(basisOf);
+        if (bases.some(Boolean)) {
+          columnBasis = bases;
+          tableBasis = bases.find(Boolean) ?? null;
+        }
+        continue;
+      }
+      const nameIdx = cells.findIndex(
+        (c, i) => i !== amountIdx && /[a-z]/i.test(c) && !AMOUNT_CELL.test(c),
+      );
+      if (nameIdx === -1) continue;
+      const name = cells[nameIdx]!;
+      if (/serving|per\s+100|amount per|%\s*dv|daily value/i.test(name)) continue;
+      rows.push({
+        label: name,
+        value: cells[amountIdx]!.replace(/iu$/i, 'IU'),
+        elementalStated: /\belemental\b/i.test(name),
+        basis:
+          columnBasis[amountIdx] ?? (columnBasis.filter(Boolean).length > 1 ? null : tableBasis),
+        where: 'Facts table on page',
+      });
+      if (rows.length >= 40) return rows;
+    }
   }
   return rows;
 }
 
-export function extractProductPage(html: string): PageExtraction {
+/**
+ * `sourceKind` picks the product-name parser: a marketplace/retailer title is
+ * read with the conservative listing parser (pack weights and ranges are
+ * never doses; a basis only when stated). Brand pages keep titleAmounts.
+ */
+export function extractProductPage(
+  html: string,
+  opts: { sourceKind?: 'BRAND_WEBSITE' | 'MARKETPLACE' | 'OTHER'; pageUrl?: URL } = {},
+): PageExtraction {
+  const own = thisProductOnly(html, opts.pageUrl ?? null);
   const methods = new Set<'structured_data' | 'parser'>();
   const products = jsonLdProducts(html);
   const p = products[0] ?? null;
@@ -195,7 +265,7 @@ export function extractProductPage(html: string): PageExtraction {
   }
   const imagesSeen = Boolean(p?.image || meta('og:image'));
 
-  const text = visibleText(html);
+  const text = visibleText(own);
   const serving = clean(
     /serving size\s*[:\-–]?\s*(\d+(?:\.\d+)?\s*(?:capsules?|tablets?|softgels?|scoops?|sachets?|gumm(?:y|ies)|strips?|g|ml|caplets?)(?:\s*\([^)]{1,20}\))?)/i.exec(
       text,
@@ -215,16 +285,26 @@ export function extractProductPage(html: string): PageExtraction {
 
   const ingredients: ExtractedIngredient[] = [
     ...(name
-      ? titleAmounts(name).map((a) => ({
-          ...a,
-          elementalStated: false,
-          where: 'Product name' as const,
-        }))
+      ? opts.sourceKind === 'MARKETPLACE'
+        ? listingAmounts(name, '').map((a) => ({
+            label: a.label,
+            value: a.value,
+            elementalStated: /^elemental\b/i.test(a.label),
+            basis: a.basis,
+            where: 'Product name' as const,
+          }))
+        : titleAmounts(name).map((a) => ({
+            ...a,
+            elementalStated: false,
+            basis: null, // a product name never states a basis
+            where: 'Product name' as const,
+          }))
       : []),
-    ...tableRows(html),
+    ...tableRows(own),
     ...descriptionAmounts(text).map((a) => ({
       ...a,
       elementalStated: /elemental/i.test(a.label),
+      basis: /\(per ([a-z]+)\)$/i.exec(a.label)?.[1]?.toLowerCase() ?? null,
       where: 'Page text' as const,
     })),
   ];

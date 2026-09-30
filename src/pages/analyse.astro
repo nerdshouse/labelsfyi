@@ -1,11 +1,10 @@
 ---
+import EvidenceReport from '@/components/analyse/EvidenceReport.astro';
 import SearchBox from '@/components/search/SearchBox.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { analyseUrl, candidateDocuments, type AnalysisResult } from '@/lib/analyse/analyse';
 import { catalogueContext, type CatalogueContext } from '@/lib/analyse/catalogue';
 import { loadCatalogueIndex } from '@/lib/comparison/facts-source';
-import { formatDate } from '@/lib/formatting/dates';
-import { formatMoney } from '@/lib/formatting/money';
 import { SOURCES } from '@/lib/sources/policy';
 
 /**
@@ -77,28 +76,24 @@ if (Astro.request.method === 'POST') {
   }
 }
 const x = result?.extraction ?? null;
-const SOURCE_LABEL = {
-  BRAND_WEBSITE: 'Brand product page',
-  MARKETPLACE: 'Marketplace listing',
-  OTHER: 'Web page',
-} as const;
-const sourceLabel = result?.policy ? SOURCE_LABEL[result.policy.sourceKind] : null;
 const showFacts =
   state === 'EXTRACTION_SUCCESS' || state === 'EXTRACTION_PARTIAL' || state === 'CANDIDATE_CREATED';
 ---
 
 <BaseLayout
   title="Check a supplement"
-  description="Paste a supplement product URL to see what the product page states, what is missing, and how it compares with verified labels on labels.fyi."
+  description="Paste a supplement product URL to see what the product page discloses, what evidence it links, what is missing, and which questions to ask the brand."
   canonicalPath="/analyse"
   noindex={state !== 'EMPTY'}
 >
   <div class="page max-w-3xl pt-8" data-analyse-state={state}>
     <p class="caption text-ink-3">Check a supplement</p>
-    <h1 class="h1 mt-2">What does this product page actually state?</h1>
+    <h1 class="h1 mt-2">What does this product page actually tell us?</h1>
     <p class="lede mt-3">
-      Paste a product URL. We read the facts the page states (ingredients, amounts, serving, price)
-      and show what is missing. Nothing is verified until someone checks the actual label.
+      Paste a product URL. We sort what the page states into an evidence report: identity, formula,
+      quality documents, certifications and claims, what isn’t disclosed, and questions you can ask
+      the brand. We don’t rate or rank products, and nothing is verified until someone checks the
+      actual label.
     </p>
 
     <form method="post" action="/analyse" class="mt-6 flex flex-wrap gap-2" data-analyse-form>
@@ -182,89 +177,11 @@ const showFacts =
     )}
 
     {showFacts && x && result?.provenance && (
-      <section class="mt-8" aria-labelledby="found-h" data-extraction>
-        <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 id="found-h" class="h2">
-            {state === 'EXTRACTION_PARTIAL' ? 'Product found, some facts missing' : 'What we found'}
-          </h2>
-          <span class="tag tag-marker" data-unverified>
-            Unverified
-          </span>
-        </div>
-        <p class="mt-1 text-sm text-ink-2">
-          Source: {sourceLabel} · observed {formatDate(result.provenance.observedAt)} ·{' '}
-          <a
-            href={result.provenance.sourceUrl}
-            class="link"
-            rel="nofollow noopener noreferrer"
-            target="_blank"
-          >
-            page
-          </a>
-          . These are the page’s own statements, not a verified label.
-        </p>
-        <dl class="mt-4 grid grid-cols-[9rem_1fr] gap-x-4 gap-y-2 border-t-2 border-ink pt-3 text-sm">
-          <dt class="text-ink-3">Brand</dt>
-          <dd>{x.brand ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
-          <dt class="text-ink-3">Product</dt>
-          <dd class="font-semibold">{x.name}</dd>
-          <dt class="text-ink-3">Serving</dt>
-          <dd>{x.serving ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
-          <dt class="text-ink-3">Servings per pack</dt>
-          <dd>{x.servingsPerContainer ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
-          <dt class="text-ink-3">Ingredients</dt>
-          <dd>
-            {x.ingredients.length ? (
-              <ul data-extracted-ingredients>
-                {x.ingredients.map((i) => (
-                  <li>
-                    {i.label} — <span class="num font-mono">{i.value}</span>
-                    {i.elementalStated && <span class="tag ml-1">stated as elemental</span>}
-                    <span class="text-xs text-ink-3"> ({i.where.toLowerCase()})</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span class="text-ink-3 italic">No amounts stated on the page</span>
-            )}
-          </dd>
-          <dt class="text-ink-3">Observed price</dt>
-          <dd>
-            {x.price ? (
-              <span class="num font-mono">
-                {formatMoney({ amount: x.price.amount, currency: x.price.currency as 'INR' })}
-              </span>
-            ) : (
-              <span class="text-ink-3 italic">Not stated</span>
-            )}
-          </dd>
-          <dt class="text-ink-3">Barcode</dt>
-          <dd>{x.gtin ?? <span class="text-ink-3 italic">Not stated</span>}</dd>
-          <dt class="text-ink-3">Veg</dt>
-          <dd>
-            {x.vegStatement ? (
-              `“${x.vegStatement}” (page statement)`
-            ) : (
-              <span class="text-ink-3 italic">Not stated</span>
-            )}
-          </dd>
-          <dt class="text-ink-3">Images</dt>
-          <dd class="text-ink-3">{x.imagesSeen ? 'Label image not collected.' : 'None.'}</dd>
-        </dl>
-
-        {result.missing && result.missing.length > 0 && (
-          <div class="mt-5">
-            <h3 class="caption text-ink-3">What is missing</h3>
-            <ul class="mt-1 list-[square] pl-5 text-sm" data-missing>
-              {result.missing.map((m) => (
-                <li>{m}</li>
-              ))}
-            </ul>
-            <p class="mt-2 text-xs text-ink-3">
-              We never calculate a missing amount (for example elemental magnesium from a compound
-              weight).
-            </p>
-          </div>
+      <section class="mt-8" aria-label="Evidence report" data-extraction>
+        {result.report ? (
+          <EvidenceReport report={result.report} provenance={result.provenance} />
+        ) : (
+          <p class="text-sm text-ink-3">No evidence report is available for this page.</p>
         )}
 
         {context && (context.possibleSame.length > 0 || context.ingredients.length > 0) && (

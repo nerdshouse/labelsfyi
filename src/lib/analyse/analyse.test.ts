@@ -336,12 +336,14 @@ describe('extraction', () => {
         label: 'Magnesium glycinate',
         value: '1000 mg',
         elementalStated: false,
+        basis: 'serving', // from the table's own "Amount per serving" header
         where: 'Facts table on page',
       },
       {
         label: 'Elemental magnesium',
         value: '220 mg',
         elementalStated: true,
+        basis: 'serving', // from the table's own "Amount per serving" header
         where: 'Facts table on page',
       },
     ]);
@@ -354,10 +356,20 @@ describe('extraction', () => {
   it('never keeps marketing prose, ratings, reviews, image URLs or script content', async () => {
     const r = await run(PRODUCT_URL);
     const json = JSON.stringify(r);
-    expect(json).not.toMatch(/revolutionary|clinically researched|restful/i);
+    // The description itself is never kept…
+    expect(json).not.toMatch(/revolutionary|advanced sleep formula|Our .* combines/i);
     expect(json).not.toMatch(/4\.9|2847|ratingValue|reviewCount/);
     expect(json).not.toMatch(/cdn\.okbrand\.in|pack\.jpg/);
     expect(json).not.toContain('99 capsules'); // from a <script>, never read
+    // …only the brand's claim, as a short phrase in the claims audit (≤ 12 words)…
+    const { report, ...rest } = r;
+    expect(JSON.stringify(rest)).not.toMatch(/clinically researched|restful/i);
+    expect(report!.claims.map((c) => c.text)).toEqual([
+      'clinically researched ingredients for deep restful sleep',
+    ]);
+    // …and never in what "Submit for verification" would store.
+    const docs = candidateDocuments(r, OK_POLICY, [], 'x');
+    expect(JSON.stringify(docs)).not.toMatch(/clinically researched|restful|revolutionary/i);
   });
   it('never computes an elemental amount', () => {
     const x = extractProductPage(
