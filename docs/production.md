@@ -203,11 +203,22 @@ pnpm test:routes http://localhost:4323 --production
    to the document's `_id`. Until then the analyser and the feed importer refuse the source
    (`PERMISSION_UNVERIFIED`).
 3. Import research output (`research/catalogue/*.ndjson`, gitignored) into the **private**
-   production dataset. Every document is an UNVERIFIED `ingestionCandidate`, never a product:
+   production dataset. The file only ever holds one `dataSource`, its `sourceSnapshot`s and
+   UNVERIFIED, unmatched `ingestionCandidate`s — never products or reviews. Check it first, then
+   import with `--missing` (skip any document whose ID already exists). IDs are deterministic
+   (`snapshot.<source>.<shopifyProductId>`, `candidate.<source>.<shopifyProductId>`), so importing
+   the same file again creates nothing and never overwrites a reviewer's edits:
 
    ```bash
-   pnpm --filter @labels-fyi/studio exec sanity dataset import ../research/catalogue/briyo-2026-09-29.ndjson production --missing
+   pnpm research:check-import research/catalogue/fitlix-2026-09-30.ndjson
    ```
+
+   ```bash
+   pnpm --filter @labels-fyi/studio exec sanity dataset import ../research/catalogue/fitlix-2026-09-30.ndjson production --missing --project-id r1eiikj7
+   ```
+
+   Never use `--replace` for candidates: it would overwrite review work. A later re-fetch of the
+   same source is skipped by `--missing` (the first snapshot of each listing is kept).
 
 4. Editors turn candidates into products from **label photos** (Submit or editorial capture), fact
    check them, and publish with an approved review by a **real** reviewer. Only published,
