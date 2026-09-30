@@ -10,16 +10,12 @@
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import {
-  extractShopifyFeed,
-  assertCollectionPermitted,
-  dataSourceTypeFor,
-  type SourceConfig,
-} from '@/lib/ingestion/shopify-feed';
+import { buildFeedImportDocuments, type RegisteredSource } from '@/lib/ingestion/feed-import';
+import { extractShopifyFeed, assertCollectionPermitted } from '@/lib/ingestion/shopify-feed';
 
 const [id, flag, file] = process.argv.slice(2);
 const registry = JSON.parse(readFileSync('research/sources.json', 'utf8')) as {
-  sources: Array<SourceConfig & { termsExcerpt: string; permissionBasis?: string; robots: string }>;
+  sources: RegisteredSource[];
 };
 const source = registry.sources.find((s) => s.id === id);
 if (!source) throw new Error(`Unknown source "${id}". See research/sources.json.`);
@@ -40,28 +36,10 @@ const raw =
 const out = extractShopifyFeed(JSON.parse(raw), source, fetchedAt);
 const hash = createHash('sha256').update(raw).digest('hex');
 const date = fetchedAt.slice(0, 10);
-const docs = [
-  {
-    _id: `dataSource.${source.id}`,
-    _type: 'dataSource',
-    name: source.name,
-    domain: source.domain,
-    // From the registered sourceKind: a retailer/marketplace is never "brand".
-    sourceType: dataSourceTypeFor(source),
-    active: false,
-    accessMode: source.accessMode,
-    termsReviewedAt: fetchedAt,
-    termsSummary: source.termsExcerpt,
-    accessPolicy: `${source.permissionBasis ?? ''} Robots: ${source.robots}`.trim(),
-    // Listings deliberately not turned into candidates, with the reason.
-    notes: out.skipped.length
-      ? `Skipped ${out.skipped.length} listing(s) on ${date}: ${out.skipped
-          .map((k) => `${k.handle} (${k.reason})`)
-          .join('; ')}`
-      : null,
-  },
-  ...out.products.flatMap((p) => [{ ...p.snapshot, contentHash: `sha256:${hash}` }, p.candidate]),
-];
+// Deterministic IDs + `sanity dataset import --missing` = idempotent import
+// (src/lib/ingestion/feed-import.ts). Check before importing:
+//   pnpm research:check-import research/catalogue/<source>-<date>.ndjson
+const docs = buildFeedImportDocuments(out, source, { contentHash: `sha256:${hash}` });
 mkdirSync('research/catalogue', { recursive: true });
 const path = `research/catalogue/${source.id}-${date}.ndjson`;
 writeFileSync(path, docs.map((d) => JSON.stringify(d)).join('\n') + '\n');

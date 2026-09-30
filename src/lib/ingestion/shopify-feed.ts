@@ -286,7 +286,12 @@ export function extractShopifyFeed(
       continue;
     }
     const url = `${base}/products/${p.handle}`;
-    const snapshotId = `snapshot.${source.id}.${p.handle}`;
+    // Stable, valid Sanity IDs: Shopify's numeric product id, never the handle
+    // (handles can be renamed by the store and may be > 128 chars or contain
+    // ®/™). Re-importing the same listing always targets the same documents.
+    if (!Number.isSafeInteger(p.id) || p.id <= 0)
+      throw new Error(`${source.name}: listing "${p.handle}" has no numeric Shopify id.`);
+    const snapshotId = `snapshot.${source.id}.${p.id}`;
     const desc = text(p.body_html);
     const tags = tagsOf(p);
     const brand = brandFromVendor(p.vendor, source);
