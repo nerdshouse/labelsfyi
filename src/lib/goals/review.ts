@@ -106,19 +106,23 @@ export function goalCandidatesFromSuggestions(
       statement?: string;
       sourceLocator?: string;
     }>) ?? [];
-  return suggestions
-    .filter((s) => s.goalSlug && goalIdBySlug[s.goalSlug])
-    .map((s) => ({
-      _id: `productGoal.${productId.replace(/^product\./, '')}.${s.goalSlug}`,
-      _type: 'productGoal',
-      product: { _type: 'reference', _ref: productId },
-      goal: { _type: 'reference', _ref: goalIdBySlug[s.goalSlug!]! },
-      basis: s.basis ?? 'BRAND_MARKETING',
-      statement: s.statement ?? null,
-      sourceUrl: (candidate.sourceUrl as string | undefined) ?? null,
-      sourceLocator: s.sourceLocator ?? null,
-      observedAt: (candidate.extractedAt as string | undefined) ?? null,
-      status: 'CANDIDATE',
-      isDemo: false,
-    }));
+  return (
+    suggestions
+      // A suggestion without a recorded basis is dropped, never assumed to be
+      // brand marketing.
+      .filter((s) => s.basis && s.goalSlug && goalIdBySlug[s.goalSlug])
+      .map((s) => ({
+        _id: `productGoal.${productId.replace(/^product\./, '')}.${s.goalSlug}`,
+        _type: 'productGoal',
+        product: { _type: 'reference', _ref: productId },
+        goal: { _type: 'reference', _ref: goalIdBySlug[s.goalSlug!]! },
+        basis: s.basis,
+        statement: s.statement ?? null,
+        sourceUrl: (candidate.sourceUrl as string | undefined) ?? null,
+        sourceLocator: s.sourceLocator ?? null,
+        observedAt: (candidate.extractedAt as string | undefined) ?? null,
+        status: 'CANDIDATE',
+        isDemo: false,
+      }))
+  );
 }

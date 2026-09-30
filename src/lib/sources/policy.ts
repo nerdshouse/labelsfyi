@@ -30,9 +30,11 @@ export interface SourcePolicy {
   termsExcerpt: string;
   permissionBasis?: string;
   /**
-   * True only once WRITTEN permission is on file and checked (an AUTHORIZED
-   * assetPermission record, named in permissionRecord). An automated access
-   * mode alone is not enough: until verified the source is refused.
+   * True only once WRITTEN permission is on file and checked. permissionRecord
+   * names it: an AUTHORIZED assetPermission _id, or an "operator-attested:<date>"
+   * reference when the operator holds the written authorization outside Sanity.
+   * An automated access mode alone is not enough: until both are set the
+   * source is refused.
    */
   permissionVerified?: boolean;
   permissionRecord?: string | null;

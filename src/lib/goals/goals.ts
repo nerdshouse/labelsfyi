@@ -122,7 +122,7 @@ export interface GoalCard {
   isDemo: boolean;
 }
 
-const BASIS_TEXT = (r: ProductGoalData, goalName: string) => {
+export const BASIS_TEXT = (r: ProductGoalData, goalName: string) => {
   const where = [r.sourceLocator, r.observedAt ? `observed ${formatDate(r.observedAt)}` : null]
     .filter(Boolean)
     .join(', ');
@@ -130,6 +130,8 @@ const BASIS_TEXT = (r: ProductGoalData, goalName: string) => {
   switch (r.basis) {
     case 'BRAND_MARKETING':
       return `Marketed by the brand for ${goal} support${r.statement ? `: “${r.statement}”` : ''}${where ? ` (${where})` : ''}.`;
+    case 'RETAILER_LISTING':
+      return `Listed by a retailer under ${goalName}${r.statement ? `: “${r.statement}”` : ''}${where ? ` (${where})` : ''}. This is the retailer’s categorisation, not the brand’s.`;
     case 'EDITORIAL_CLASSIFICATION':
       return `Classified under ${goalName} by labels.fyi editors${r.statement ? `: ${r.statement}` : ''}.`;
     case 'INGREDIENT_MATCH':

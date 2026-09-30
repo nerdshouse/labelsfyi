@@ -13,6 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   extractShopifyFeed,
   assertCollectionPermitted,
+  dataSourceTypeFor,
   type SourceConfig,
 } from '@/lib/ingestion/shopify-feed';
 
@@ -45,7 +46,8 @@ const docs = [
     _type: 'dataSource',
     name: source.name,
     domain: source.domain,
-    sourceType: 'brand',
+    // From the registered sourceKind: a retailer/marketplace is never "brand".
+    sourceType: dataSourceTypeFor(source),
     active: false,
     accessMode: source.accessMode,
     termsReviewedAt: fetchedAt,

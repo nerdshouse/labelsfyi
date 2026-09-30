@@ -11,10 +11,7 @@
       "robots": "Product pages allowed for all agents; ClaudeBot and anthropic-ai explicitly welcomed. /cart, /checkout, /account, sorted/filtered collections disallowed.",
       "termsExcerpt": "ToS: users \"agree not to sell, license, rent, modify, distribute, copy, reproduce, transmit, publicly display…\" without permission. Proceeding only on the brand-permission basis above.",
       "collected": "One request to the public /products.json feed. No HTML crawling, no images downloaded.",
-      "hosts": [
-        "www.briyosupplements.com",
-        "briyosupplements.com"
-      ],
+      "hosts": ["www.briyosupplements.com", "briyosupplements.com"],
       "sourceKind": "BRAND_WEBSITE",
       "productPath": "^/products/[a-z0-9][a-z0-9-]{0,120}/?$",
       "permissionVerified": false,
@@ -28,10 +25,7 @@
       "robots": "Product and collection pages allowed.",
       "termsExcerpt": "Prohibited uses include: \"To spam, phish, crawl, or scrape\"; \"You agree not to reproduce, duplicate, copy … any portion of the Service without express written permission\".",
       "collected": "Nothing. Needs written permission, a brand-supplied feed, or user-submitted labels.",
-      "hosts": [
-        "mycf.in",
-        "www.mycf.in"
-      ],
+      "hosts": ["mycf.in", "www.mycf.in"],
       "sourceKind": "BRAND_WEBSITE",
       "permissionVerified": false
     },
@@ -43,10 +37,7 @@
       "robots": "Product pages allowed (Shopify standard).",
       "termsExcerpt": "\"Any use of this website or its contents, including copying or storing it … other than for your own personal, non-commercial use is prohibited without the written permission\".",
       "collected": "Nothing (labels.fyi is commercial: it has buy links). Consistent with the Sprint 1 research-only decision.",
-      "hosts": [
-        "wellbeingnutrition.com",
-        "www.wellbeingnutrition.com"
-      ],
+      "hosts": ["wellbeingnutrition.com", "www.wellbeingnutrition.com"],
       "sourceKind": "BRAND_WEBSITE",
       "permissionVerified": false
     },
@@ -58,10 +49,7 @@
       "robots": "Product and collection pages allowed.",
       "termsExcerpt": "Prohibited: \"to spam, phish, pharm, pretext, spider, crawl, or scrape\"; must not \"reproduce, duplicate, copy … any portion of the Service … without express written permission\".",
       "collected": "Nothing. Needs written permission, a brand-supplied feed, or user-submitted labels.",
-      "hosts": [
-        "rasayanam.in",
-        "www.rasayanam.in"
-      ],
+      "hosts": ["rasayanam.in", "www.rasayanam.in"],
       "sourceKind": "BRAND_WEBSITE",
       "permissionVerified": false
     },
@@ -73,30 +61,25 @@
       "robots": "n/a",
       "termsExcerpt": "IndiaMART-hosted water-treatment chemicals business (biocides, RO chemicals). Out of scope.",
       "collected": "Nothing. The intended brand was rasayanam.in.",
-      "hosts": [
-        "rasayan.in",
-        "www.rasayan.in"
-      ],
+      "hosts": ["rasayan.in", "www.rasayan.in"],
       "sourceKind": "OTHER",
       "permissionVerified": false
     },
     {
       "id": "fitlix",
-      "name": "FITLIX",
+      "name": "FITLIX (retailer)",
       "domain": "fitlix.co.in",
-      "accessMode": "BRAND_PERMISSION",
-      "permissionBasis": "Written permission is stated by the labels.fyi operator as cleared, but the authorized assetPermission record has not yet been linked in this repository. Keep automated collection refused until permissionVerified is true with permissionRecord set to the corresponding AUTHORIZED assetPermission document.",
-      "robots": "Product catalogue is publicly exposed; robots.txt still needs to be captured and recorded before activation.",
-      "termsExcerpt": "Permission-based collection only. The labels.fyi operator states written permission is cleared; exact permission scope/document must be recorded before automated collection is activated.",
-      "collected": "Nothing yet. Source registered as a pending permitted brand source.",
-      "hosts": [
-        "fitlix.co.in",
-        "www.fitlix.co.in"
-      ],
-      "sourceKind": "BRAND_WEBSITE",
-      "productPath": "^/products/[a-z0-9][a-z0-9-]{0,120}/?$",
-      "permissionVerified": false,
-      "permissionRecord": null
+      "accessMode": "AUTHORIZED_FEED",
+      "permissionBasis": "FITLIX is a multi-brand supplement retailer, not a manufacturer. On 2026-09-30 the labels.fyi operator confirmed authorization to fetch the FITLIX catalogue (public /products.json). The written authorization is held by the operator; by decision it is not recorded as a Sanity document, so permissionRecord is an operator-attestation reference, not an assetPermission _id. Scope used: FITLIX's own listing data and product URLs. Brand imagery, label artwork and product copy are not collected: a retailer cannot authorise them.",
+      "robots": "Captured 2026-09-30 (Shopify default): User-agent * allows /products/<handle>, /products.json and /collections/; disallows cart, checkout, orders, account, admin, sorted/filtered collections and /recommendations/products. No crawl-delay. Sitemap: https://fitlix.co.in/sitemap.xml (106 product URLs).",
+      "termsExcerpt": "Collection on the basis of the operator-confirmed FITLIX authorization (2026-09-30), limited to FITLIX's own listing data: product facts it lists and its product URLs. Brand imagery, label artwork and product copy are out of scope.",
+      "collected": "2026-09-30: one request to /products.json → 106 products, 105 UNVERIFIED ingestion candidates, 1 skipped (combo pack), written to research/catalogue/fitlix-2026-09-30.ndjson (gitignored, not imported into Sanity). No images downloaded; no image references or description text kept.",
+      "notes": "Retailer listing: the seller is FITLIX; each product's brand is Shopify's vendor exactly as reported (e.g. MuscleBlaze, BigMuscles Nutrition, Beastlife), never FITLIX. www.fitlix.co.in is not served (TLS handshake failure / HTTP 409 on 2026-09-30).",
+      "hosts": ["fitlix.co.in", "www.fitlix.co.in"],
+      "sourceKind": "MARKETPLACE",
+      "productPath": "^/products/[a-z0-9](?:[a-z0-9-]|%[89a-fA-F][0-9a-fA-F]){0,254}/?$",
+      "permissionVerified": true,
+      "permissionRecord": "operator-attested:2026-09-30"
     }
   ]
 }

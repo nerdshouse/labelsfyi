@@ -30,14 +30,25 @@ robots.txt means no rules, and a 5xx or unreachable robots.txt means refusal. It
 alternative endpoints, caches, search-engine copies or other indirect routes to reach a refused
 source.
 
-## Current decisions (reviewed 29 Sept 2026)
+## Current decisions (reviewed 30 Sept 2026)
 
-| Source                 | Mode               | Why                                                                                                            |
-| ---------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| briyosupplements.com   | `BRAND_PERMISSION` | Operator-stated client brand. **Refused (`permissionVerified: false`) until the written permission is filed.** |
-| mycf.in                | `NOT_PERMITTED`    | Terms prohibit crawling or scraping, and copying without permission                                            |
-| wellbeingnutrition.com | `NOT_PERMITTED`    | Personal, non-commercial use only                                                                              |
-| rasayanam.in           | `NOT_PERMITTED`    | Terms prohibit spidering, crawling or scraping, and copying                                                    |
+| Source                 | Mode               | Why                                                                                                                                |
+| ---------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| briyosupplements.com   | `BRAND_PERMISSION` | Operator-stated client brand. **Refused (`permissionVerified: false`) until the written permission is filed.**                     |
+| mycf.in                | `NOT_PERMITTED`    | Terms prohibit crawling or scraping, and copying without permission                                                                |
+| wellbeingnutrition.com | `NOT_PERMITTED`    | Personal, non-commercial use only                                                                                                  |
+| rasayanam.in           | `NOT_PERMITTED`    | Terms prohibit spidering, crawling or scraping, and copying                                                                        |
+| fitlix.co.in           | `AUTHORIZED_FEED`  | Multi-brand **retailer** (`MARKETPLACE`). Operator-confirmed authorization to fetch its catalogue (2026-09-30). Listing data only. |
+
+**Retailers and marketplaces** (`sourceKind: MARKETPLACE`) use `AUTHORIZED_FEED`, not
+`BRAND_PERMISSION`: the permission comes from the store, not from the brands it sells, and it can
+only cover the store's own listing data (the facts it lists and its product URLs), never the brands'
+images, label artwork or copy. `permissionRecord` is either an `assetPermission` `_id` or, when the
+operator holds the written authorization outside Sanity, an `operator-attested:<date>` reference
+(FITLIX). Retailer imports keep the retailer as the source of the listing and each product's brand
+exactly as the store's `vendor` reports it (never the retailer); they record no image references
+and no description text, and goal suggestions use the basis `RETAILER_LISTING`, never
+`BRAND_MARKETING`.
 
 Adding a source: record the terms excerpt and robots notes, set the mode, and add `hosts` and
 `productPath`. A refused source still has two routes in: brand permission or a feed, and
