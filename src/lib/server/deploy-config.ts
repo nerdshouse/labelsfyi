@@ -69,6 +69,11 @@ export function workerConfigProblems(cfg: WorkerConfig): string[] {
     v.CONTENT_SOURCE !== 'sanity' && 'Worker var CONTENT_SOURCE is not "sanity"',
     !/^[a-z0-9]{6,32}$/.test(v.SANITY_PROJECT_ID ?? '') &&
       'Worker var SANITY_PROJECT_ID is empty or malformed (wrangler.jsonc env.production.vars)',
+    !['open', 'closed'].includes(v.PUBLIC_SUBMISSIONS ?? '') &&
+      'Worker var PUBLIC_SUBMISSIONS must be exactly "open" or "closed"',
+    v.PUBLIC_SUBMISSIONS === 'open' &&
+      v.SUBMISSIONS_PRIVATE_DATASET !== 'true' &&
+      'PUBLIC_SUBMISSIONS is "open" but SUBMISSIONS_PRIVATE_DATASET is not "true"',
     accessTeamDomainProblem(v.ACCESS_TEAM_DOMAIN),
     accessAudProblem(v.ACCESS_AUD),
     cfg.workers_dev !== false && 'workers_dev must be false',

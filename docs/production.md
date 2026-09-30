@@ -75,7 +75,10 @@ Account `64046e526f11f6a2fd89e7d7ebdf55ee`. Worker `labelsfyi`, which must match
      build environment, so an empty value here wins over a value set in CI.
    - `ACCESS_TEAM_DOMAIN`, e.g. `labelsfyi.cloudflareaccess.com`
    - `ACCESS_AUD`: the Access application's Audience tag
-   - `SUBMISSIONS_PRIVATE_DATASET`: `"true"` only after step 1.2
+   - `SUBMISSIONS_PRIVATE_DATASET`: `"true"` only after step 1.2. Opens the PRIVATE store for
+     `/internal/*` review; it does not open public submissions.
+   - `PUBLIC_SUBMISSIONS`: `"closed"` (current) or `"open"`. Anything else is closed at runtime and
+     refused by the deploy guard; `"open"` also requires `SUBMISSIONS_PRIVATE_DATASET="true"`.
 4. **Worker secrets** (`--env production`):
 
    ```bash
@@ -239,7 +242,8 @@ Configured and verified:
     `.env.production.local` (mode 600) and as GitHub repo secret `SANITY_READ_TOKEN`
   - `labels-fyi-worker-write` (editor, id `g-deBCGQV8NDPh`): stored only as the Worker secret
     `SANITY_WRITE_TOKEN` (`--env production`)
-- `SANITY_PROJECT_ID=r1eiikj7` and `SUBMISSIONS_PRIVATE_DATASET="true"` in `env.production.vars`.
+- `SANITY_PROJECT_ID=r1eiikj7`, `SUBMISSIONS_PRIVATE_DATASET="true"` (internal review) and
+  `PUBLIC_SUBMISSIONS="closed"` (public intake answers 503) in `env.production.vars`.
 - GitHub repo secrets `SANITY_READ_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
 - Top-level Worker name `labelsfyi-local`; only `env.production` is `labelsfyi`, and the deploy
   guard refuses any other name. This does **not** stop Cloudflare Workers Builds: it deployed the

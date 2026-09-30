@@ -37,6 +37,10 @@ export interface ServerEnv {
   SANITY_WRITE_TOKEN?: string;
   /** Must be "true": the hard prerequisite from docs/ingestion.md. */
   SUBMISSIONS_PRIVATE_DATASET?: string;
+  /** Public intake: "open" opens it; anything else (incl. unset) keeps it closed. */
+  PUBLIC_SUBMISSIONS?: string;
+  /** Base URL of Sanity Studio for "Open in Studio" links (default: local Studio). */
+  SANITY_STUDIO_URL?: string;
 }
 
 export async function serverEnv(): Promise<ServerEnv> {

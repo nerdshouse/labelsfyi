@@ -1,97 +1,144 @@
 ---
 import InternalLayout from '@/layouts/InternalLayout.astro';
 import { serverEnv } from '@/lib/server/env';
+import {
+  filterRows,
+  LIST_QUERY,
+  parseFilters,
+  summarise,
+  type CandidateRow,
+} from '@/lib/candidates/review';
 import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
 
 /**
- * Unverified candidates from the URL analyser and research imports.
- * Read-only here; verification happens in Studio / the review pipeline.
- * Protected by the /internal middleware.
+ * Unverified candidates from permitted research/feed imports and the URL
+ * analyser (not public label submissions: those are at /internal/review).
+ * Everything shown is UNVERIFIED listing data. Protected by the /internal
+ * middleware (Cloudflare Access → Basic auth).
  */
 export const prerender = false;
 
-type Row = {
-  _id: string;
-  title: string;
-  sourceUrl: string | null;
-  extractor: string | null;
-  extractedAt: string | null;
-  status: string;
-  matchStatus: string;
-  facts: Array<{
-    field: string;
-    label?: string;
-    value: string;
-    method: string;
-    verificationStatus: string;
-  }>;
-  possible: Array<{ level: string; name: string | null }>;
-};
-let rows: Row[] = [];
+let all: CandidateRow[] = [];
 let notConfigured: string | null = null;
 try {
   const store = await getDocStore(await serverEnv());
-  rows = await store.query<
-    Row[]
-  >(`*[_type == "ingestionCandidate" && !defined(submission)] | order(extractedAt desc)[0...200] {
-    _id, title, sourceUrl, extractor, extractedAt, status, matchStatus,
-    "facts": coalesce(facts[]{ field, label, value, method, verificationStatus }, []),
-    "possible": coalesce(possibleMatches[]{ level, "name": product->name }, [])
-  }`);
+  all = (await store.query<Parameters<typeof summarise>[0][]>(LIST_QUERY)).map(summarise);
 } catch (e) {
   if (e instanceof NotConfiguredError) notConfigured = e.message;
   else throw e;
 }
+const filters = parseFilters(Astro.url.searchParams);
+const rows = filterRows(all, filters);
+const brands = [...new Set(all.map((r) => r.brand).filter((b): b is string => !!b))].sort((a, b) =>
+  a.localeCompare(b),
+);
+const STATUSES = ['needs_verification', 'in_review', 'rejected', 'accepted'];
 ---
 
 <InternalLayout title="Candidates">
   <h1 class="h2">Unverified candidates</h1>
   <p class="mt-2 max-w-3xl text-sm text-ink-2">
-    From the URL analyser and permitted research imports. Nothing here is public. Facts become label
-    facts only after someone verifies them against the actual label.
+    From permitted research imports and the URL analyser. Nothing here is public. Listing data is
+    discovery only: amounts become label facts only after someone verifies them against the physical
+    label in Studio.
   </p>
   {notConfigured && <p class="notice mt-4">{notConfigured}</p>}
-  <ul class="mt-6 space-y-4">
-    {rows.length === 0 && <li class="text-ink-3">No candidates.</li>}
-    {rows.map((r) => (
-      <li class="border-2 border-ink bg-sheet p-3 text-sm" data-candidate={r._id}>
-        <p class="font-semibold">{r.title}</p>
-        <p class="text-xs text-ink-3">
-          {r.extractor} · {r.extractedAt?.slice(0, 16).replace('T', ' ')} · {r.status} ·{' '}
-          {r.matchStatus}
-          {r.sourceUrl && (
-            <>
-              {' · '}
-              <a href={r.sourceUrl} class="link" rel="noopener noreferrer nofollow" target="_blank">
-                source
-              </a>
-            </>
-          )}
-        </p>
-        <table class="facts mt-2 w-full text-xs">
-          <tbody>
-            {r.facts.map((f) => (
-              <tr>
-                <td>
-                  {f.field}
-                  {f.label ? ` · ${f.label}` : ''}
-                </td>
-                <td class="font-mono">{f.value}</td>
-                <td>{f.method}</td>
-                <td>
-                  <span class="tag">{f.verificationStatus}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {r.possible.length > 0 && (
-          <p class="mt-1 text-xs">
-            Possible matches (unconfirmed):{' '}
-            {r.possible.map((p) => `${p.name} (${p.level})`).join(', ')}
-          </p>
+
+  <form method="get" class="mt-4 flex flex-wrap items-end gap-3 text-sm" data-candidate-filters>
+    <label class="flex flex-col">
+      <span class="caption">Brand</span>
+      <select name="brand" class="border-2 border-ink bg-sheet px-2 py-1">
+        <option value="">All</option>
+        {brands.map((b) => (
+          <option selected={filters.brand === b}>{b}</option>
+        ))}
+      </select>
+    </label>
+    <label class="flex flex-col">
+      <span class="caption">Status</span>
+      <select name="status" class="border-2 border-ink bg-sheet px-2 py-1">
+        <option value="">All</option>
+        {STATUSES.map((s) => (
+          <option selected={filters.status === s}>{s}</option>
+        ))}
+      </select>
+    </label>
+    <label class="flex items-center gap-1">
+      <input type="checkbox" name="amounts" value="1" checked={filters.amounts} /> Has ingredient
+      amounts
+    </label>
+    <label class="flex items-center gap-1">
+      <input type="checkbox" name="basis" value="1" checked={filters.basis} /> Has basis-not-stated
+      amounts
+    </label>
+    <label class="flex items-center gap-1">
+      <input type="checkbox" name="duplicate" value="1" checked={filters.duplicate} /> Duplicate
+      flagged
+    </label>
+    <button class="border-2 border-ink bg-ink px-3 py-1 text-paper">Filter</button>
+    <a href="/internal/candidates" class="link">
+      Clear
+    </a>
+  </form>
+
+  <p class="mt-3 text-xs text-ink-3" data-candidate-count>
+    {rows.length} of {all.length} candidates
+  </p>
+  <div class="mt-2 overflow-x-auto">
+    <table class="facts w-full min-w-[64rem] text-xs">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Brand / vendor</th>
+          <th>Source</th>
+          <th>Price</th>
+          <th>MRP</th>
+          <th title="ingredient_amount facts (basis stated)">Amounts</th>
+          <th title="Listing statements with no stated basis">Basis not stated</th>
+          <th>Duplicate</th>
+          <th>Status</th>
+          <th>Fetched</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td colspan="10" class="text-ink-3">
+              No candidates.
+            </td>
+          </tr>
         )}
-      </li>
-    ))}
-  </ul>
+        {rows.map((r) => (
+          <tr data-candidate={r._id}>
+            <td>
+              <a href={`/internal/candidates/${r._id}`} class="link font-semibold">
+                {r.title}
+              </a>
+            </td>
+            <td>{r.brand ?? '—'}</td>
+            <td>{r.source ?? '—'}</td>
+            <td class="font-mono">{r.price ?? '—'}</td>
+            <td class="font-mono">{r.mrp ?? '—'}</td>
+            <td class="font-mono">{r.ingredientAmounts}</td>
+            <td class="font-mono">{r.basisNotStated}</td>
+            <td>
+              {r.duplicate ? (
+                <span class="tag" title={r.notes ?? ''}>
+                  possible
+                </span>
+              ) : (
+                ''
+              )}
+            </td>
+            <td>
+              <span class="tag">{r.status}</span>
+              {r.rejectionReason && <span class="ml-1">({r.rejectionReason})</span>}
+              {r.resolvedProduct && <span class="ml-1">· linked</span>}
+            </td>
+            <td class="whitespace-nowrap">{r.fetchedAt?.slice(0, 10) ?? '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
 </InternalLayout>

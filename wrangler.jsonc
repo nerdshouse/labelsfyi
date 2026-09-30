@@ -23,6 +23,8 @@
   "preview_urls": false,
   // Private bucket for submitted label photos (local emulation in dev).
   "r2_buckets": [{ "binding": "SUBMISSIONS", "bucket_name": "labels-fyi-submissions" }],
+  // Local development accepts submissions (stored in the R2 emulation).
+  "vars": { "PUBLIC_SUBMISSIONS": "open" },
   "ratelimits": [
     {
       "name": "SUBMIT_RATE_LIMITER",
@@ -53,12 +55,15 @@
         "SANITY_PROJECT_ID": "r1eiikj7",
         "SANITY_DATASET": "production",
         "SANITY_API_VERSION": "2025-02-19",
-        // Public label submissions are CLOSED for the initial launch: anything
-        // but "true" makes /api/submissions (and the analyser's "Submit for
-        // verification") answer 503 "Submissions are not open yet" before any
-        // upload is read or stored. Set "true" to open them (the dataset is
-        // verified private; the production build re-proves it every time).
-        "SUBMISSIONS_PRIVATE_DATASET": "false",
+        // Public label submissions are CLOSED: anything but "open" makes
+        // /api/submissions (and the analyser's "Submit for verification")
+        // answer 503 "Submissions are not open yet" before any upload is read
+        // or stored. deploy-guard accepts only "open" or "closed".
+        "PUBLIC_SUBMISSIONS": "closed",
+        // The dataset is private (the production build re-proves it every
+        // time), so the PRIVATE internal review store (/internal/*, behind
+        // Access + auth) is available. This does not open public submissions.
+        "SUBMISSIONS_PRIVATE_DATASET": "true",
         // Cloudflare Access application protecting /internal/*.
         "ACCESS_TEAM_DOMAIN": "gentle-glitter-5a69.cloudflareaccess.com",
         "ACCESS_AUD": "f462a8558f5b9b748028c56bf2c36e3e0ac22e73a70da65b390a425ba41d3129",

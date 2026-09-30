@@ -76,3 +76,20 @@ export function checkInternalAccess(
     return new Response('Cross-origin request blocked.', { status: 403, headers: PRIVATE_HEADERS });
   return null;
 }
+
+/**
+ * Who is acting on /internal, for audit fields (reviewedBy). Call only AFTER
+ * checkInternalAccess passed. Prefers the verified Cloudflare Access email;
+ * otherwise the (already verified) Basic auth user name.
+ */
+export function internalActor(request: Request, accessEmail: string | null): string | null {
+  if (accessEmail) return accessEmail;
+  const [scheme, encoded] = (request.headers.get('authorization') ?? '').split(' ');
+  if (scheme !== 'Basic' || !encoded) return null;
+  try {
+    const user = atob(encoded).split(':')[0] ?? '';
+    return user || null;
+  } catch {
+    return null;
+  }
+}

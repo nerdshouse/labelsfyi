@@ -20,6 +20,8 @@ const production = (vars: Record<string, string> = {}): WorkerConfig => ({
     SANITY_PROJECT_ID: 'r1eiikj7',
     ACCESS_TEAM_DOMAIN: TEAM,
     ACCESS_AUD: AUD,
+    PUBLIC_SUBMISSIONS: 'closed',
+    SUBMISSIONS_PRIVATE_DATASET: 'true',
     ...vars,
   },
 });
@@ -101,5 +103,23 @@ describe('deploy guard: baked production Worker config', () => {
     expect(workerConfigProblems(production({ DEPLOY_ENV: 'development' }))).toHaveLength(1);
     expect(workerConfigProblems(production({ CONTENT_SOURCE: 'demo' }))).toHaveLength(1);
     expect(workerConfigProblems(production({ SANITY_PROJECT_ID: '' }))).toHaveLength(1);
+  });
+  it('public submissions: exactly "open" or "closed"; open needs the private dataset', () => {
+    expect(workerConfigProblems(production({ PUBLIC_SUBMISSIONS: 'open' }))).toEqual([]);
+    for (const bad of ['', 'Closed', 'OPEN', 'true', 'false', ' closed', 'yes'])
+      expect(workerConfigProblems(production({ PUBLIC_SUBMISSIONS: bad })), bad).toHaveLength(1);
+    const { PUBLIC_SUBMISSIONS: _omit, ...rest } = production().vars!;
+    expect(workerConfigProblems({ ...production(), vars: rest })).toHaveLength(1);
+    expect(
+      workerConfigProblems(
+        production({ PUBLIC_SUBMISSIONS: 'open', SUBMISSIONS_PRIVATE_DATASET: 'false' }),
+      ),
+    ).toHaveLength(1);
+    // Closed + private: the production configuration (internal review works).
+    expect(
+      workerConfigProblems(
+        production({ PUBLIC_SUBMISSIONS: 'closed', SUBMISSIONS_PRIVATE_DATASET: 'true' }),
+      ),
+    ).toEqual([]);
   });
 });

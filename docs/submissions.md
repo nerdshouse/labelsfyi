@@ -97,7 +97,7 @@ editorial review dated at or after the record's `verifiedAt`** (`gateSubmissionR
 | ---------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Photos                 | R2 bucket `labels-fyi-submissions` (`SUBMISSIONS` binding)      | Private: no public bucket, no r2.dev, no custom domain.                                                               |
 | Object keys            | `submissions/YYYY/MM/sub-<20 hex>/NN-<16 hex>.<jpg\|png\|webp>` | Generated server-side. Submitted filenames are never used. Every key read back is checked against this exact pattern. |
-| Submission + candidate | Sanity (`labelSubmission`, `ingestionCandidate`)                | **Private dataset required** (`SUBMISSIONS_PRIVATE_DATASET=true`), else the API refuses with 503.                     |
+| Submission + candidate | Sanity (`labelSubmission`, `ingestionCandidate`)                | **Private dataset required** (`SUBMISSIONS_PRIVATE_DATASET=true`) and `PUBLIC_SUBMISSIONS=open`, else the API is 503. |
 | Local development      | R2 emulation (`.wrangler/state`) as JSON docs under `dev-docs/` | `R2DocStore`, only when `import.meta.env.DEV` and no Sanity write token.                                              |
 
 Photos are served to reviewers only through `/internal/review/image/<key>` (authenticated, strict
@@ -179,6 +179,45 @@ build:
 | `src/lib/server/internal-auth.ts`, `src/middleware.ts`       | Internal route protection                                 |
 | `src/pages/internal/review/**`                               | Review UI and POST handlers                               |
 | `src/lib/content/repository.ts` (`gateSubmissionRecords`)    | Site-side approval gate                                   |
+
+## Public intake vs internal review
+
+Two independent switches (`src/lib/submissions/store-factory.ts`):
+
+| `PUBLIC_SUBMISSIONS` | `SUBMISSIONS_PRIVATE_DATASET` | Public API / analyser submit | `/internal/*` review |
+| -------------------- | ----------------------------- | ---------------------------- | -------------------- |
+| `closed` (prod)      | `true` (prod)                 | 503 "not open yet"           | works                |
+| `open`               | `true`                        | open                         | works                |
+| anything else/unset  | `true`                        | 503 (fail closed)            | works                |
+| any                  | not `true`                    | 503                          | unavailable          |
+
+## Candidate review (`/internal/candidates`)
+
+Research/feed and analyser candidates (not submission candidates, which stay in
+`/internal/review`). The list shows name, brand/vendor, source, price and MRP ranges, counts of
+`ingredient_amount` and basis-not-stated facts, duplicate flag, status and fetch date, with
+filters. `/internal/candidates/<id>` shows identity, the UNVERIFIED listing data and provenance,
+with "Open in Studio" links. Rules: `src/lib/candidates/review.ts`.
+
+State transitions (existing fields, plus the optional `rejectionReason`):
+
+| From                               | Action                   | To                                                                                             |
+| ---------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `needs_verification`               | Mark in review           | `in_review`                                                                                    |
+| `needs_verification` / `in_review` | Reject (reason)          | `rejected` + `rejectionReason` (`not_a_product` also sets `matchStatus: not_a_product`)        |
+| `needs_verification` / `in_review` | Create DRAFT product     | `in_review`, `matchStatus: new_product`, `resolvedProduct` → `product.candidate-<source>.<id>` |
+| `needs_verification` / `in_review` | Link to existing product | `in_review`, `matchStatus: confirmed`, `resolvedProduct` → that product                        |
+
+- Every action records `reviewedBy` (Cloudflare Access email, else the Basic auth user) and
+  `reviewedAt`. Repeating an action is a no-op; a conflicting one (e.g. rejecting a linked
+  candidate, or a different rejection reason) is refused. Rejected/accepted candidates are
+  changed only in Studio.
+- The draft product has identity only: name, slug, brand and category if the reviewer picked
+  existing ones, `workflowStatus: DRAFT`. A `productReference` (`productReference.candidate-…`)
+  records the listing URL and data source. No amounts, serving, servings per container,
+  elemental figures, veg status, label facts, claims, GTIN or price are copied.
+- Nothing here publishes, approves, verifies a fact or creates an editorial review. `accepted`
+  stays reserved for Studio once every fact is verified against the label.
 
 ## Known limitations
 

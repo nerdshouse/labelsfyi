@@ -1,0 +1,387 @@
+---
+import InternalLayout from '@/layouts/InternalLayout.astro';
+import { serverEnv } from '@/lib/server/env';
+import {
+  DETAIL_QUERY,
+  draftProductId,
+  isBasisNotStated,
+  isDuplicateFlagged,
+  loadCandidate,
+  priceRange,
+  REJECTION_REASONS,
+  studioUrl,
+  type Candidate,
+  type Fact,
+} from '@/lib/candidates/review';
+import { getDocStore, NotConfiguredError } from '@/lib/submissions/store-factory';
+
+/**
+ * One ingestion candidate: identity, UNVERIFIED listing data, provenance and
+ * the reviewer actions (lib/candidates/review.ts). Only non-submission
+ * ingestion candidates load here. Protected by the /internal middleware.
+ */
+export const prerender = false;
+
+type Detail = {
+  dataSource: {
+    _id: string;
+    name?: string;
+    domain?: string;
+    sourceType?: string;
+    accessMode?: string;
+    active?: boolean;
+    notes?: string;
+  } | null;
+  snapshot: {
+    _id: string;
+    url?: string;
+    fetchedAt?: string;
+    httpStatus?: number;
+    capturedBy?: string;
+    contentHash?: string;
+    notes?: string;
+  } | null;
+  product: { _id: string; name?: string; workflowStatus?: string } | null;
+  brands: Array<{ _id: string; name?: string; workflowStatus?: string }>;
+  categories: Array<{ _id: string; name?: string }>;
+  products: Array<{ _id: string; name?: string; workflowStatus?: string }>;
+};
+
+const id = Astro.params.id ?? '';
+const env = await serverEnv();
+let c: Candidate | null = null;
+let d: Detail | null = null;
+let notConfigured: string | null = null;
+try {
+  const store = await getDocStore(env);
+  c = await loadCandidate(store, id);
+  if (c)
+    d = await store.query<Detail>(DETAIL_QUERY, {
+      dataSourceId: c.dataSource?._ref ?? '',
+      snapshotId: c.snapshot?._ref ?? '',
+      productId: c.resolvedProduct?._ref ?? '',
+    });
+} catch (e) {
+  if (e instanceof NotConfiguredError) notConfigured = e.message;
+  else throw e;
+}
+if (!notConfigured && !c) return new Response('Not found', { status: 404 });
+
+const facts: Fact[] = c?.facts ?? [];
+const of = (field: string) => facts.filter((f) => f.field === field);
+const brand = of('brand')[0]?.value ?? null;
+const amounts = of('ingredient_amount');
+const basisless = facts.filter(isBasisNotStated);
+const status = c?.status ?? 'needs_verification';
+const open = status === 'needs_verification' || status === 'in_review';
+const linked = c?.resolvedProduct?._ref ?? null;
+const studio = env.SANITY_STUDIO_URL || 'http://localhost:3333';
+const goals =
+  (c?.goalSuggestions as
+    | Array<{ goalSlug?: string; basis?: string; statement?: string; sourceLocator?: string }>
+    | undefined) ?? [];
+const action = `/internal/candidates/${id}/action`;
+---
+
+<InternalLayout title={c?.title ?? 'Candidate'}>
+  <p class="caption">
+    <a href="/internal/candidates" class="link">
+      ← Candidates
+    </a>
+  </p>
+  {notConfigured && <p class="notice mt-4">{notConfigured}</p>}
+  {c && d && (
+    <div data-candidate-detail={c._id}>
+      <h1 class="h2 mt-2">{c.title}</h1>
+      <p class="mt-1 text-sm">
+        <span class="tag" data-status={status}>
+          {status}
+        </span>
+        {c.rejectionReason && <span class="ml-1">({c.rejectionReason})</span>}
+        <span class="ml-2 text-ink-3">match: {c.matchStatus ?? 'unmatched'}</span>
+        {c.reviewedBy && (
+          <span class="ml-2 text-ink-3">
+            · {c.reviewedBy}, {c.reviewedAt?.slice(0, 16).replace('T', ' ')}
+          </span>
+        )}
+      </p>
+      <p class="mt-1 text-sm">
+        <a href={studioUrl(studio, c._id, 'ingestionCandidate')} class="link" target="_blank">
+          Open candidate in Studio
+        </a>
+        {linked && (
+          <>
+            {' · '}
+            <a href={studioUrl(studio, linked, 'product')} class="link" target="_blank">
+              Open linked product in Studio
+            </a>
+            <span class="ml-1 text-ink-3">
+              ({d.product?.name ?? linked}, {d.product?.workflowStatus ?? 'missing'})
+            </span>
+          </>
+        )}
+      </p>
+
+      <section class="mt-6">
+        <h2 class="h3">Identity</h2>
+        <table class="facts mt-2 w-full text-sm">
+          <tbody>
+            <tr>
+              <th>Title</th>
+              <td>{c.title}</td>
+            </tr>
+            <tr>
+              <th>Brand / vendor (as listed)</th>
+              <td>{brand ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>Listing URL</th>
+              <td>
+                {c.sourceUrl ? (
+                  <a
+                    href={c.sourceUrl}
+                    class="link break-all"
+                    rel="noopener noreferrer nofollow"
+                    target="_blank"
+                  >
+                    {c.sourceUrl}
+                  </a>
+                ) : (
+                  '—'
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th>Snapshot</th>
+              <td class="font-mono">{c.snapshot?._ref ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>Fetched</th>
+              <td>{d.snapshot?.fetchedAt ?? c.extractedAt ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>Variants</th>
+              <td>
+                {of('variant')
+                  .map((f) => f.value)
+                  .join(' · ') || '—'}
+              </td>
+            </tr>
+            <tr>
+              <th>Price (as listed)</th>
+              <td class="font-mono">{priceRange(facts, 'price') ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>MRP (as listed)</th>
+              <td class="font-mono">{priceRange(facts, 'mrp') ?? '—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="mt-6 border-l-[3px] border-alert pl-3" data-unverified>
+        <h2 class="h3">UNVERIFIED LISTING DATA</h2>
+        <p class="mt-1 text-xs text-ink-2">
+          What the listing states. Not label evidence: none of this is copied to a product. Verify
+          against the physical label in Studio.
+        </p>
+        <h3 class="caption mt-3">Ingredient amounts ({amounts.length})</h3>
+        <table class="facts mt-1 w-full text-xs">
+          <tbody>
+            {amounts.length === 0 && (
+              <tr>
+                <td class="text-ink-3">None.</td>
+              </tr>
+            )}
+            {amounts.map((f) => (
+              <tr>
+                <td>{f.label}</td>
+                <td class="font-mono">{f.value}</td>
+                <td>{f.method}</td>
+                <td>
+                  <span class="tag">{f.verificationStatus}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <h3 class="caption mt-3">Basis not stated ({basisless.length})</h3>
+        <table class="facts mt-1 w-full text-xs">
+          <tbody>
+            {basisless.length === 0 && (
+              <tr>
+                <td class="text-ink-3">None.</td>
+              </tr>
+            )}
+            {basisless.map((f) => (
+              <tr>
+                <td>{f.label}</td>
+                <td class="font-mono">{f.value}</td>
+                <td>{f.method}</td>
+                <td>
+                  <span class="tag">{f.verificationStatus}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <h3 class="caption mt-3">Pack size</h3>
+        <p class="text-xs">
+          {of('pack_size')
+            .map((f) => (f.label ? `${f.label}: ${f.value}` : f.value))
+            .join(' · ') || '—'}
+        </p>
+        <h3 class="caption mt-3">Variants</h3>
+        <p class="text-xs">
+          {of('variant')
+            .map((f) => f.value)
+            .join(' · ') || '—'}
+        </p>
+        <h3 class="caption mt-3">Retailer goal suggestions</h3>
+        <ul class="text-xs">
+          {goals.length === 0 && <li class="text-ink-3">None.</li>}
+          {goals.map((g) => (
+            <li>
+              {g.goalSlug} ({g.basis}): “{g.statement}” — {g.sourceLocator}
+            </li>
+          ))}
+        </ul>
+        <h3 class="caption mt-3">Extraction methods</h3>
+        <p class="text-xs">
+          {[...new Set(facts.map((f) => f.method).filter(Boolean))].join(', ') || '—'}
+        </p>
+        <h3 class="caption mt-3">Duplicate notes</h3>
+        <p class="text-xs" data-duplicate={isDuplicateFlagged(c) ? 'yes' : 'no'}>
+          {isDuplicateFlagged(c) ? c.notes : '—'}
+        </p>
+      </section>
+
+      <section class="mt-6">
+        <h2 class="h3">Provenance</h2>
+        <table class="facts mt-2 w-full text-sm" data-provenance>
+          <tbody>
+            <tr>
+              <th>DataSource</th>
+              <td>
+                <span class="font-mono">{d.dataSource?._id ?? c.dataSource?._ref ?? '—'}</span>
+                {d.dataSource &&
+                  ` · ${d.dataSource.name} (${d.dataSource.sourceType}, ${d.dataSource.accessMode})`}
+              </td>
+            </tr>
+            <tr>
+              <th>SourceSnapshot</th>
+              <td>
+                <span class="font-mono">{d.snapshot?._id ?? c.snapshot?._ref ?? '—'}</span>
+                {d.snapshot?.contentHash && (
+                  <span class="ml-1 font-mono text-ink-3">{d.snapshot.contentHash}</span>
+                )}
+              </td>
+            </tr>
+            <tr>
+              <th>URL</th>
+              <td class="break-all">{d.snapshot?.url ?? c.sourceUrl ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>fetchedAt</th>
+              <td>{d.snapshot?.fetchedAt ?? '—'}</td>
+            </tr>
+            <tr>
+              <th>Extractor</th>
+              <td>
+                {c.extractor ?? '—'} (extracted {c.extractedAt ?? '—'})
+              </td>
+            </tr>
+            <tr>
+              <th>Method</th>
+              <td>{d.snapshot?.capturedBy ?? '—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="mt-6" data-actions>
+        <h2 class="h3">Review actions</h2>
+        <p class="mt-1 max-w-3xl text-xs text-ink-2">
+          Recorded as you, with the time. None of these publish, approve, verify a fact or create an
+          editorial review. A draft product carries identity only (name, source reference, brand and
+          category if you pick them).
+        </p>
+        {!open && (
+          <p class="notice mt-2">
+            This candidate is {status}; no further actions here. Use Studio.
+          </p>
+        )}
+        {open && (
+          <div class="mt-3 grid gap-4 md:grid-cols-2">
+            {status === 'needs_verification' && (
+              <form method="post" action={action}>
+                <input type="hidden" name="action" value="mark_in_review" />
+                <button class="border-2 border-ink bg-sheet px-3 py-1 text-sm">
+                  Mark in review
+                </button>
+              </form>
+            )}
+            {!linked && (
+              <form method="post" action={action} class="flex flex-wrap items-end gap-2 text-sm">
+                <input type="hidden" name="action" value="reject" />
+                <label class="flex flex-col">
+                  <span class="caption">Reject: reason</span>
+                  <select name="reason" required class="border-2 border-ink bg-sheet px-2 py-1">
+                    <option value="">Choose…</option>
+                    {REJECTION_REASONS.map((r) => (
+                      <option value={r}>{r}</option>
+                    ))}
+                  </select>
+                </label>
+                <button class="border-2 border-alert bg-sheet px-3 py-1">Reject</button>
+              </form>
+            )}
+            {!linked && (
+              <form method="post" action={action} class="flex flex-col gap-2 text-sm">
+                <input type="hidden" name="action" value="create_draft" />
+                <span class="caption">Create DRAFT product ({draftProductId(c._id)})</span>
+                <select name="brandId" class="border-2 border-ink bg-sheet px-2 py-1">
+                  <option value="">No brand (set later in Studio)</option>
+                  {d.brands.map((b) => (
+                    <option value={b._id}>
+                      {b.name} ({b.workflowStatus})
+                    </option>
+                  ))}
+                </select>
+                <select name="categoryId" class="border-2 border-ink bg-sheet px-2 py-1">
+                  <option value="">No category (set later in Studio)</option>
+                  {d.categories.map((k) => (
+                    <option value={k._id}>{k.name}</option>
+                  ))}
+                </select>
+                <button class="border-2 border-ink bg-ink px-3 py-1 text-paper">
+                  Create draft product
+                </button>
+              </form>
+            )}
+            {!linked && (
+              <form method="post" action={action} class="flex flex-col gap-2 text-sm">
+                <input type="hidden" name="action" value="link_existing" />
+                <span class="caption">Link to existing product</span>
+                <select name="productId" required class="border-2 border-ink bg-sheet px-2 py-1">
+                  <option value="">{d.products.length ? 'Choose…' : 'No products yet'}</option>
+                  {d.products.map((p) => (
+                    <option value={p._id}>
+                      {p.name} ({p.workflowStatus})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  class="border-2 border-ink bg-sheet px-3 py-1"
+                  disabled={!d.products.length}
+                >
+                  Link
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  )}
+</InternalLayout>

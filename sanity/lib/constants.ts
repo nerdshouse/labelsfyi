@@ -183,6 +183,12 @@ export const CANDIDATE_STATUS = [
   opt('accepted', 'Accepted'),
   opt('rejected', 'Rejected'),
 ];
+/** Why a reviewer rejected an ingestion candidate (internal candidate review). */
+export const CANDIDATE_REJECTION_REASON = [
+  opt('not_a_product', 'Not a product'),
+  opt('out_of_scope', 'Out of scope'),
+  opt('duplicate', 'Duplicate'),
+];
 export const MATCH_STATUS = [
   opt('unmatched', 'Not yet matched'),
   opt('possible_match', 'Possible match(es)'),

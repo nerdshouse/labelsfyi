@@ -10,3 +10,6 @@ REVIEW_PASSWORD=change-me-to-a-long-random-string
 # SANITY_DATASET=
 # SANITY_WRITE_TOKEN=
 # SUBMISSIONS_PRIVATE_DATASET=true
+# Public submissions: "open" or "closed" (anything else = closed). The local
+# default comes from wrangler.jsonc (open).
+# PUBLIC_SUBMISSIONS=closed

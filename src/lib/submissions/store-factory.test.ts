@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ServerEnv } from '@/lib/server/env';
-import { getDocStore, NotConfiguredError, submissionsUnavailableMessage } from './store-factory';
+import {
+  getDocStore,
+  getPublicSubmissionStore,
+  NotConfiguredError,
+  publicSubmissionsOpen,
+  submissionsUnavailableMessage,
+} from './store-factory';
 
 /**
  * The reviewer banner on /internal/* shows the NotConfiguredError message.
@@ -53,5 +59,67 @@ describe('reviewer banner: why the submission store is unavailable', () => {
     expect(submissionsUnavailableMessage(undefined)).toBe(
       'Submissions require a private Sanity dataset.',
     );
+  });
+});
+
+/**
+ * PUBLIC_SUBMISSIONS gates public intake only; SUBMISSIONS_PRIVATE_DATASET
+ * gates the private store used by /internal review. Production is
+ * closed + private: internal review works, public intake answers 503.
+ */
+describe('public submissions vs private internal review', () => {
+  const both = (pub: string | undefined, priv: string | undefined): ServerEnv => ({
+    ...env(priv),
+    ...(pub === undefined ? {} : { PUBLIC_SUBMISSIONS: pub }),
+  });
+  const available = async (p: Promise<unknown>) =>
+    p.then(
+      () => true,
+      (e: unknown) => {
+        expect(e).toBeInstanceOf(NotConfiguredError);
+        return false;
+      },
+    );
+
+  it('closed + private: internal store available, public intake closed', async () => {
+    const e = both('closed', 'true');
+    expect(publicSubmissionsOpen(e)).toBe(false);
+    expect(await available(getDocStore(e))).toBe(true);
+    expect(await available(getPublicSubmissionStore(e))).toBe(false);
+  });
+
+  it('open + private: both available (normal operation)', async () => {
+    const e = both('open', 'true');
+    expect(publicSubmissionsOpen(e)).toBe(true);
+    expect(await available(getDocStore(e))).toBe(true);
+    expect(await available(getPublicSubmissionStore(e))).toBe(true);
+  });
+
+  it('open but dataset not confirmed private: nothing available', async () => {
+    for (const priv of ['false', undefined, 'yes']) {
+      const e = both('open', priv);
+      expect(await available(getDocStore(e))).toBe(false);
+      expect(await available(getPublicSubmissionStore(e))).toBe(false);
+    }
+  });
+
+  it('malformed or missing PUBLIC_SUBMISSIONS fails closed', async () => {
+    for (const pub of [
+      undefined,
+      '',
+      'OPEN',
+      'Open',
+      ' open',
+      'open ',
+      'true',
+      '1',
+      'yes',
+      'opened',
+    ]) {
+      const e = both(pub, 'true');
+      expect(publicSubmissionsOpen(e), String(pub)).toBe(false);
+      expect(await available(getPublicSubmissionStore(e)), String(pub)).toBe(false);
+      expect(await available(getDocStore(e)), String(pub)).toBe(true); // internal unaffected
+    }
   });
 });
