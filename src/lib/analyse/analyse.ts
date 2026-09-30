@@ -3,7 +3,9 @@ import type { IdentityRecord } from '@/lib/identity/match';
 import { decide, type SourcePolicy } from '@/lib/sources/policy';
 import type { HostResolver } from './dns-guard';
 import { safeFetch, type FetchLike } from './fetch';
+import { extractEvidence } from './evidence';
 import { extractProductPage, MINERALS, toFacts, type PageExtraction } from './extract';
+import { buildEvidenceReport, type EvidenceReport } from './report';
 import { robotsAllows } from './robots';
 import { checkUrl } from './safe-url';
 
@@ -12,7 +14,8 @@ import { checkUrl } from './safe-url';
  * docs/security.md). Pipeline, failing closed at every step:
  *
  *   validate URL → source register (policy) → public-DNS check → robots.txt → fetch page
- *   → extract facts → UNVERIFIED candidate (only on "Submit for verification")
+ *   → extract facts → evidence report (lib/analyse/report.ts)
+ *   → UNVERIFIED candidate (only on "Submit for verification")
  *
  * Never: publishes, downloads images, stores descriptions, runs page JS.
  */
@@ -42,6 +45,8 @@ export interface AnalysisResult {
   extraction?: PageExtraction;
   missing?: string[];
   provenance?: Provenance;
+  /** What the source tells us, and what is still unknown. Never a score. */
+  report?: EvidenceReport;
 }
 
 const NOT_ALLOWED = "We can't automatically analyse this source.";
@@ -106,7 +111,10 @@ export async function analyseUrl(
       policy: pub,
     };
 
-  const extraction = extractProductPage(page.body);
+  const extraction = extractProductPage(page.body, {
+    sourceKind: policy.sourceKind,
+    pageUrl: page.url,
+  });
   const provenance: Provenance = {
     sourceUrl: page.url.toString(),
     sourceKind: policy.sourceKind,
@@ -138,6 +146,7 @@ export async function analyseUrl(
       provenance,
     };
   const complete = Boolean(extraction.serving && extraction.ingredients.length);
+  const report = buildEvidenceReport(extraction, extractEvidence(page.body, page.url), provenance);
   return {
     state: complete ? 'EXTRACTION_SUCCESS' : 'EXTRACTION_PARTIAL',
     message: complete ? 'Product found.' : 'Product found, but some facts are missing.',
@@ -146,6 +155,7 @@ export async function analyseUrl(
     extraction,
     missing,
     provenance,
+    report,
   };
 }
 

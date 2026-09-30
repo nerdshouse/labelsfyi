@@ -257,3 +257,36 @@ a Product. Extraction order: JSON-LD Product (name, brand, sku, GTIN, offer pric
 description, image, review or rating) → meta tags → visible facts (serving lines,
 supplement-facts table rows, "X mg of Y per tablet"). No OCR on images. Security:
 docs/security.md. Policy: docs/source-policy.md.
+
+### Evidence report
+
+A successful analysis is shown as an evidence report (`src/lib/analyse/report.ts`, rendered by
+`src/components/analyse/EvidenceReport.astro`): "what does this source actually tell us, and what
+is still unknown?" It is an evidence reader. It never scores, rates, ranks or recommends.
+
+- **Sections:** identity, formula, label/nutrition, quality evidence, certifications, brand claims,
+  "What isn't disclosed?", inconsistencies, and questions to ask the brand. A summary gives counts
+  only.
+- **One status vocabulary** (`EVIDENCE_STATUS`): Disclosed, Source claim, Document found, Not
+  found, Basis not stated, Needs verification, Inconsistent, Label verified, Editorial
+  calculation. The analyser never sees the pack or calculates, so it never emits the last two.
+- **Basis:** only when stated, either in the facts table's own header ("Amount per serving") or as
+  "… per X". A product-name amount such as "3g Creatine" is always _basis not stated_. Marketplace
+  titles use the conservative listing parser (`listingAmounts`), so pack weights are never read as
+  doses.
+- **Claims vs evidence:**
+  - "Third-party tested" and "GMP certified" are _source claims_.
+  - A linked COA or certificate is _document found_. Its contents are **not read** (no linked
+    document is fetched), so testing scope stays _not found_.
+  - Nothing is ever "verified by labels.fyi" here.
+- **Brand claims** are kept as short phrases (≤ 12 words), shown in the report only, never
+  stored in a candidate. Verb claims ("supports …") count only when they name a health or
+  performance topic.
+- **Only this product:** site chrome (header, footer, nav, aside, dialogs) and links to other
+  product pages, with their text, are removed before reading, so another product's card is
+  never attributed to this page.
+- **Inconsistencies** use the `DiscrepancyValue` shape (source kind, value, locator, observed).
+  They are computed per request and never stored. Neither value is chosen.
+- **Questions** come only from actual gaps and inconsistencies. "Copy all questions" is the only
+  action; there is no messaging integration.
+- **"Not found"** always means "not found on the analysed page".

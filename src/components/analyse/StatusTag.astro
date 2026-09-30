@@ -1,0 +1,50 @@
+---
+import { EVIDENCE_STATUS, type EvidenceStatus } from '@/lib/analyse/report';
+
+/**
+ * One evidence status, in words (never colour alone). Distinguished by rule
+ * style, not traffic-light colours: solid = disclosed, dashed = not found,
+ * filled ink = a document, highlighter only where the reader should look
+ * twice (basis not stated, inconsistent).
+ */
+interface Props {
+  status: EvidenceStatus | 'EVIDENCE_LINKED' | 'EVIDENCE_NOT_FOUND' | 'REQUIRES_REVIEW';
+}
+const { status } = Astro.props;
+const EXTRA = {
+  EVIDENCE_LINKED: {
+    label: 'Evidence linked',
+    description: 'The brand links something next to this claim. It has not been reviewed.',
+  },
+  EVIDENCE_NOT_FOUND: {
+    label: 'Evidence not found',
+    description: 'No supporting evidence was linked next to this claim on the analysed page.',
+  },
+  REQUIRES_REVIEW: {
+    label: 'Requires review',
+    description: 'labels.fyi has not assessed this claim.',
+  },
+};
+const meta =
+  status in EVIDENCE_STATUS
+    ? EVIDENCE_STATUS[status as EvidenceStatus]
+    : EXTRA[status as keyof typeof EXTRA];
+const style = {
+  DISCLOSED: 'border-ink text-ink',
+  SOURCE_CLAIM: 'border-ink text-ink-2 italic',
+  DOCUMENT_FOUND: 'tag-ink',
+  NOT_FOUND: 'border-dashed border-ink-3 text-ink-3',
+  BASIS_NOT_STATED: 'border-marker bg-marker-soft text-ink',
+  NEEDS_VERIFICATION: 'border-ink-3 text-ink-2',
+  INCONSISTENT: 'tag-marker',
+  LABEL_VERIFIED: 'tag-ink',
+  EDITORIAL_CALCULATION: 'border-ink text-ink',
+  EVIDENCE_LINKED: 'border-ink text-ink',
+  EVIDENCE_NOT_FOUND: 'border-dashed border-ink-3 text-ink-3',
+  REQUIRES_REVIEW: 'border-ink-3 text-ink-2',
+}[status];
+---
+
+<span class:list={['tag whitespace-nowrap', style]} title={meta.description} data-status={status}>
+  {meta.label}
+</span>

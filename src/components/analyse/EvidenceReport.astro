@@ -1,0 +1,541 @@
+---
+import StatusTag from '@/components/analyse/StatusTag.astro';
+import type { Provenance } from '@/lib/analyse/analyse';
+import { EVIDENCE_STATUS, type EvidenceReport, type ReportField } from '@/lib/analyse/report';
+import { formatDate } from '@/lib/formatting/dates';
+
+/**
+ * The analyser's evidence file (lib/analyse/report.ts): what the source
+ * states, with where it was read, and what is still unknown. No score, no
+ * verdict: every item carries a neutral status in words.
+ */
+interface Props {
+  report: EvidenceReport;
+  provenance: Provenance;
+}
+const { report: r, provenance: p } = Astro.props;
+const observed = formatDate(p.observedAt);
+const s = r.summary;
+const summary = [
+  [s.factsFound, s.factsFound === 1 ? 'fact found' : 'facts found'],
+  [s.itemsWithAmounts, s.itemsWithAmounts === 1 ? 'item with an amount' : 'items with amounts'],
+  [
+    s.documentsFound,
+    s.documentsFound === 1 ? 'quality/testing document linked' : 'quality/testing documents linked',
+  ],
+  [
+    s.claimsIdentified,
+    s.claimsIdentified === 1 ? 'brand claim identified' : 'brand claims identified',
+  ],
+  [s.gaps, s.gaps === 1 ? 'information gap' : 'information gaps'],
+  [s.inconsistencies, s.inconsistencies === 1 ? 'inconsistency' : 'inconsistencies'],
+] as const;
+const fieldValue = (f: ReportField) => f.value ?? 'Not found on the analysed page';
+const legend = [
+  'DISCLOSED',
+  'SOURCE_CLAIM',
+  'DOCUMENT_FOUND',
+  'NOT_FOUND',
+  'BASIS_NOT_STATED',
+  'INCONSISTENT',
+] as const;
+const sections = [
+  ['identity', 'Product identity'],
+  ['formula', 'Formula & ingredients'],
+  ['nutrition', 'Label & nutrition information'],
+  ['quality', 'Quality evidence'],
+  ['certifications', 'Certifications & compliance'],
+  ['claims', 'Brand claims'],
+  ['gaps', 'What isn’t disclosed?'],
+  ...(r.discrepancies.length ? [['discrepancies', 'Inconsistencies']] : []),
+  ...(r.questions.length ? [['questions', 'Questions to ask the brand']] : []),
+] as const;
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return u;
+  }
+};
+---
+
+<article class="mt-8" aria-labelledby="report-h" data-evidence-report>
+  <!-- Summary: counts only, never a score -->
+  <header class="border-t-[6px] border-ink pt-3">
+    <p class="caption text-ink-3">Evidence report · {r.source.label}</p>
+    <h2 id="report-h" class="h2 mt-1">
+      Here’s what we could find in the available source.
+    </h2>
+    <p class="mt-2 text-sm text-ink-2">
+      Read from {r.source.description} (
+      <a
+        href={p.sourceUrl}
+        class="link break-all"
+        rel="nofollow noopener noreferrer"
+        target="_blank"
+      >
+        {hostOf(p.sourceUrl)}
+      </a>
+      ) on <time datetime={p.observedAt}>{observed}</time>. Nothing here is checked against the
+      physical label yet, and labels.fyi does not rate or rank products: you decide.
+    </p>
+    <ul
+      class="mt-4 grid grid-cols-2 gap-px border-y border-ink bg-line sm:grid-cols-3"
+      data-report-summary
+    >
+      {summary.map(([n, label]) => (
+        <li class="bg-paper px-2 py-2 sm:px-3">
+          <span class="num block font-mono text-2xl font-semibold">{n}</span>
+          <span class="text-xs text-ink-2">{label}</span>
+        </li>
+      ))}
+    </ul>
+    <details class="mt-3 text-xs text-ink-3">
+      <summary class="cursor-pointer">How to read the statuses</summary>
+      <dl class="mt-2 grid gap-x-3 gap-y-1 sm:grid-cols-[auto_1fr]">
+        {legend.map((k) => (
+          <>
+            <dt>
+              <StatusTag status={k} />
+            </dt>
+            <dd>{EVIDENCE_STATUS[k].description}</dd>
+          </>
+        ))}
+      </dl>
+    </details>
+    <nav aria-label="Report sections" class="mt-3 text-xs">
+      <ol class="flex flex-wrap gap-x-3 gap-y-1">
+        {sections.map(([id, label], i) => (
+          <li>
+            <a href={`#r-${id}`} class="link">
+              <span class="font-mono text-ink-3">{String(i + 1).padStart(2, '0')}</span> {label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  </header>
+
+  <!-- 1. Identity -->
+  <section id="r-identity" class="report-section" aria-labelledby="r-identity-h">
+    <h3 id="r-identity-h" class="report-h">
+      <span class="report-n">01</span> Product identity
+    </h3>
+    <dl class="report-fields" data-report-identity>
+      {r.identity.map((f) => (
+        <div class="report-row" data-field={f.key}>
+          <dt class="text-ink-3">{f.label}</dt>
+          <dd class:list={[!f.value && 'text-ink-3']}>
+            <span class:list={['break-words', f.value && 'num']}>{fieldValue(f)}</span>
+            {f.ref && <span class="report-loc">{f.ref.locator}</span>}
+          </dd>
+          <dd class="report-status">
+            <StatusTag status={f.status} />
+          </dd>
+        </div>
+      ))}
+      <div class="report-row">
+        <dt class="text-ink-3">Source</dt>
+        <dd class="break-all">
+          <a href={p.sourceUrl} class="link" rel="nofollow noopener noreferrer" target="_blank">
+            {p.sourceUrl}
+          </a>
+          <span class="report-loc">
+            {r.source.label} · {r.source.name}
+          </span>
+        </dd>
+        <dd class="report-status"></dd>
+      </div>
+      <div class="report-row">
+        <dt class="text-ink-3">Observed</dt>
+        <dd>
+          <time datetime={p.observedAt}>{observed}</time>
+        </dd>
+        <dd class="report-status"></dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- 2. Formula -->
+  <section id="r-formula" class="report-section" aria-labelledby="r-formula-h">
+    <h3 id="r-formula-h" class="report-h">
+      <span class="report-n">02</span> Formula & ingredients
+    </h3>
+    {r.formula.length ? (
+      <div class="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <table class="facts mt-2 w-full min-w-[34rem] text-sm" data-report-formula>
+          <caption class="sr-only">
+            Ingredient amounts as stated on the source, with their basis
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Ingredient (as named)</th>
+              <th scope="col">Form</th>
+              <th scope="col" class="n">
+                Amount
+              </th>
+              <th scope="col" class="pl-4">
+                Basis
+              </th>
+              <th scope="col">Where</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.formula.map((f) => (
+              <tr>
+                <th scope="row" class="text-left font-semibold">
+                  {f.name}
+                  {f.amountKind === 'elemental' && (
+                    <span class="tag ml-1">stated as elemental</span>
+                  )}
+                </th>
+                <td class:list={[!f.form && 'text-ink-3']}>{f.form ?? 'not stated'}</td>
+                <td class="n num font-mono whitespace-nowrap">
+                  {f.amount} {f.unit}
+                </td>
+                <td class="pl-4">
+                  {f.basis ? (
+                    <span class="whitespace-nowrap">per {f.basis}</span>
+                  ) : (
+                    <StatusTag status="BASIS_NOT_STATED" />
+                  )}
+                </td>
+                <td class="text-xs text-ink-3">{f.ref.locator}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <p class="report-empty">No ingredient amounts were found on the analysed page.</p>
+    )}
+    <p class="report-note">
+      Amounts are shown exactly as stated. A basis appears only where the source states it; “3 g
+      creatine” without one is never read as “per serving”. Compound and elemental amounts are kept
+      apart, and nothing is calculated.
+    </p>
+  </section>
+
+  <!-- 3. Nutrition -->
+  <section id="r-nutrition" class="report-section" aria-labelledby="r-nutrition-h">
+    <h3 id="r-nutrition-h" class="report-h">
+      <span class="report-n">03</span> Label & nutrition information
+    </h3>
+    <dl class="report-fields" data-report-nutrition>
+      {r.nutrition.map((f) => (
+        <div class="report-row" data-field={f.key}>
+          <dt class="text-ink-3">{f.label}</dt>
+          <dd class:list={[!f.value && 'text-ink-3']}>
+            <span class:list={[f.value && 'num font-mono']}>{fieldValue(f)}</span>
+            {f.ref && <span class="report-loc">{f.ref.locator}</span>}
+          </dd>
+          <dd class="report-status">
+            <StatusTag status={f.status} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+    <p class="report-note">
+      Vitamins, minerals, amino acids and other actives are listed under Formula. Every value here
+      still requires label verification.
+    </p>
+  </section>
+
+  <!-- 4. Quality evidence -->
+  <section id="r-quality" class="report-section" aria-labelledby="r-quality-h">
+    <h3 id="r-quality-h" class="report-h">
+      <span class="report-n">04</span> Quality evidence
+    </h3>
+    <p class="report-note mt-1">
+      A brand saying “third-party tested” is a claim, not a laboratory report. A linked document is
+      listed as found; the analyser does not open it, so it says nothing about what was tested.
+    </p>
+    <ul class="mt-2 divide-y divide-line border-y border-ink" data-report-quality>
+      {r.quality.map((q) => (
+        <li class="grid gap-1 py-2 sm:grid-cols-[14rem_1fr_auto] sm:gap-3" data-quality={q.key}>
+          <span class="font-semibold">{q.label}</span>
+          <span class="text-sm text-ink-2">
+            {q.detail}
+            {q.documents.map((d) => (
+              <a
+                href={d.href}
+                class="link mt-0.5 block break-all"
+                rel="nofollow noopener noreferrer"
+                target="_blank"
+              >
+                {d.text || 'document'} ({d.host})
+              </a>
+            ))}
+          </span>
+          <span>
+            <StatusTag status={q.status} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <!-- 5. Certifications -->
+  <section id="r-certifications" class="report-section" aria-labelledby="r-certifications-h">
+    <h3 id="r-certifications-h" class="report-h">
+      <span class="report-n">05</span> Certifications & compliance
+    </h3>
+    <div class="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <table class="facts mt-2 w-full min-w-[34rem] text-sm" data-report-certifications>
+        <caption class="sr-only">
+          Certifications: what the brand states, whether a document was found, and whether
+          labels.fyi verified it
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">Brand states</th>
+            <th scope="col">Document</th>
+            <th scope="col">Verified by labels.fyi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {r.certifications.map((c) => (
+            <tr data-certification={c.key}>
+              <th scope="row" class="text-left font-semibold">
+                {c.label}
+              </th>
+              <td class:list={[!c.brandStatement && 'text-ink-3']}>
+                {c.brandStatement ? `“${c.brandStatement}”` : 'Not found'}
+              </td>
+              <td>
+                {c.documents.length ? (
+                  c.documents.map((d) => (
+                    <a
+                      href={d.href}
+                      class="link break-all"
+                      rel="nofollow noopener noreferrer"
+                      target="_blank"
+                    >
+                      {d.text || 'document'}
+                    </a>
+                  ))
+                ) : (
+                  <span class="text-ink-3">Not found</span>
+                )}
+              </td>
+              <td class="text-ink-3">No</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6. Claims -->
+  <section id="r-claims" class="report-section" aria-labelledby="r-claims-h">
+    <h3 id="r-claims-h" class="report-h">
+      <span class="report-n">06</span> Brand claims
+    </h3>
+    {r.claims.length ? (
+      <ul class="mt-2 divide-y divide-line border-y border-ink" data-report-claims>
+        {r.claims.map((c) => (
+          <li class="grid gap-1 py-2 sm:grid-cols-[1fr_auto] sm:gap-3">
+            <span>
+              <q class="font-serif text-lg">{c.text}</q>
+              <span class="report-loc">
+                {c.category} · {r.source.label}
+                {c.evidence && (
+                  <>
+                    {' · linked: '}
+                    <a
+                      href={c.evidence.href}
+                      class="link break-all"
+                      rel="nofollow noopener noreferrer"
+                      target="_blank"
+                    >
+                      {c.evidence.text || c.evidence.host}
+                    </a>
+                  </>
+                )}
+              </span>
+            </span>
+            <span class="flex flex-wrap gap-1 sm:justify-end">
+              <StatusTag status={c.status} />
+              <StatusTag status="REQUIRES_REVIEW" />
+            </span>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="report-empty">No product claims were identified on the analysed page.</p>
+    )}
+    <p class="report-note">
+      The brand’s own words, quoted briefly. labels.fyi has not assessed whether any claim is true;
+      this is not medical advice.
+    </p>
+  </section>
+
+  <!-- 7. Gaps -->
+  <section id="r-gaps" class="report-section" aria-labelledby="r-gaps-h">
+    <h3 id="r-gaps-h" class="report-h">
+      <span class="report-n">07</span> What isn’t disclosed?
+    </h3>
+    <p class="report-note mt-1">
+      “Not found” means we did not find it in the source we analysed, not that the product lacks it.
+    </p>
+    <ul class="mt-2 space-y-2" data-report-gaps>
+      {r.gaps.map((g) => (
+        <li class="border-l-[3px] border-ink pl-3" data-gap={g.key}>
+          <p class="font-semibold">{g.label}</p>
+          <p class="text-sm text-ink-2">{g.detail}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <!-- 8. Discrepancies (DiscrepancyValue shape: source, value, locator, observed) -->
+  {r.discrepancies.length > 0 && (
+    <section id="r-discrepancies" class="report-section" aria-labelledby="r-discrepancies-h">
+      <h3 id="r-discrepancies-h" class="report-h">
+        <span class="report-n">08</span> Inconsistencies
+      </h3>
+      <ol class="mt-2 space-y-4" data-report-discrepancies>
+        {r.discrepancies.map((d) => (
+          <li class="border-2 border-ink bg-sheet">
+            <header class="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink px-3 py-2">
+              <p class="font-semibold">{d.field}: information differs across the source</p>
+              <StatusTag status="INCONSISTENT" />
+            </header>
+            <ul class="divide-y divide-line px-3">
+              {d.values.map((v) => (
+                <li class="grid gap-1 py-2 sm:grid-cols-[8rem_1fr]">
+                  <span class="num font-mono font-semibold">{v.value}</span>
+                  <span class="text-xs text-ink-3">{v.locator}</span>
+                </li>
+              ))}
+            </ul>
+            <p class="border-t border-line px-3 py-2 text-sm">
+              <span class="caption text-ink-3">Needs clarification · </span>
+              {d.action}
+            </p>
+          </li>
+        ))}
+      </ol>
+      <p class="report-note">labels.fyi does not decide which value is correct.</p>
+    </section>
+  )}
+
+  <!-- 9. Questions -->
+  {r.questions.length > 0 && (
+    <section id="r-questions" class="report-section" aria-labelledby="r-questions-h">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="r-questions-h" class="report-h">
+          <span class="report-n">{r.discrepancies.length ? '09' : '08'}</span> Questions to ask the
+          brand
+        </h3>
+        <button
+          type="button"
+          class="btn btn-quiet hidden min-h-9 text-xs"
+          data-copy-questions
+          aria-describedby="copy-status"
+        >
+          Copy all questions
+        </button>
+      </div>
+      <p class="report-note mt-1">
+        Each question comes from something we could not find or that differs across the page.
+      </p>
+      <ol class="mt-2 list-decimal space-y-1 pl-6" data-report-questions>
+        {r.questions.map((q) => (
+          <li data-from={q.from}>{q.text}</li>
+        ))}
+      </ol>
+      <p id="copy-status" class="sr-only" role="status" aria-live="polite" data-copy-status />
+    </section>
+  )}
+</article>
+
+<script>
+  // Progressive enhancement: the only action offered is copying the text.
+  const btn = document.querySelector<HTMLButtonElement>('[data-copy-questions]');
+  const list = document.querySelector('[data-report-questions]');
+  const status = document.querySelector('[data-copy-status]');
+  if (btn && list && navigator.clipboard) {
+    btn.classList.remove('hidden');
+    btn.addEventListener('click', async () => {
+      const text = [...list.querySelectorAll('li')]
+        .map((li, i) => `${i + 1}. ${li.textContent?.trim()}`)
+        .join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'Copied';
+        if (status) status.textContent = 'Questions copied to the clipboard.';
+      } catch {
+        if (status) status.textContent = 'Could not copy. Select the questions to copy them.';
+      }
+    });
+  }
+</script>
+
+<style>
+  .report-section {
+    margin-top: 2.5rem;
+    border-top: 2px solid var(--color-ink);
+    padding-top: 0.75rem;
+    scroll-margin-top: 5rem;
+  }
+  .report-h {
+    font-family: var(--font-serif);
+    font-size: var(--text-2xl);
+    line-height: 1.15;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .report-n {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
+    vertical-align: middle;
+    margin-right: 0.35rem;
+  }
+  .report-fields {
+    margin-top: 0.5rem;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .report-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.15rem 0.75rem;
+    border-top: 1px solid var(--color-line);
+    padding: 0.45rem 0;
+    font-size: var(--text-sm);
+  }
+  .report-row > dt {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+  }
+  @media (min-width: 40rem) {
+    .report-row {
+      grid-template-columns: 12rem minmax(0, 1fr) auto;
+    }
+    .report-row > dt {
+      grid-column: auto;
+      font-size: var(--text-sm);
+    }
+  }
+  .report-status {
+    justify-self: end;
+  }
+  .report-loc {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    color: var(--color-ink-3);
+  }
+  .report-note {
+    margin-top: 0.5rem;
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
+  }
+  .report-empty {
+    margin-top: 0.5rem;
+    font-size: var(--text-sm);
+    color: var(--color-ink-3);
+  }
+</style>
